@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Azika Shop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:#f5f2ff; --bg2:#e7e0ff; --card:#ffffff; --card2:#f0ecff; --ink:#1d1a44; --mut:#756fa3; --line:#e2dcfa;
+  --acc:#6c4dff; --acc2:#9a7bff; --star:#ffb400; --ok:#10b981; --bad:#ef4565; --shadow:0 6px 18px rgba(80,60,200,.10);
+  --font:"Nunito",ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+:root[data-theme=dark]{
+  --bg:#17144a; --bg2:#221d6b; --card:#262273; --card2:#2e2a85; --ink:#f4f2ff; --mut:#aaa5de; --line:#3b3693;
+  --shadow:0 6px 18px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;color:var(--ink);font-family:var(--font);font-weight:600}
+body{
+  background:
+    radial-gradient(520px 320px at 105% -5%, color-mix(in srgb,var(--acc2) 38%,transparent), transparent 70%),
+    radial-gradient(460px 300px at -10% 18%, color-mix(in srgb,#38bdf8 26%,transparent), transparent 70%),
+    var(--bg);
+  background-attachment:fixed;
+  padding:0 16px calc(88px + env(safe-area-inset-bottom)); min-height:100vh;
+}
+button{font-family:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--acc2);outline-offset:2px}
+
+.top{display:flex;align-items:center;justify-content:space-between;padding:16px 0 12px}
+.logo{display:flex;align-items:center;gap:8px;font-size:23px;font-weight:900;letter-spacing:-.3px}
+.logo svg{width:30px;height:30px}
+.chip{display:none;align-items:center;gap:5px;background:var(--card);border:1.5px solid var(--line);border-radius:99px;padding:6px 12px;font-weight:800;font-size:14px;cursor:pointer;box-shadow:var(--shadow)}
+.chip.on{display:flex}
+.st{display:inline-block;width:.95em;height:.95em;vertical-align:-.12em;margin-left:3px}
+
+.view{animation:viewIn .18s ease-out}
+@keyframes viewIn{from{opacity:0}to{opacity:1}}
+
+/* промо-полоска */
+.strip{display:flex;align-items:center;gap:12px;background:linear-gradient(100deg,#6c4dff,#a06bff 55%,#ff7ab6);color:#fff;border-radius:18px;padding:14px 16px;margin-bottom:16px;cursor:pointer;position:relative;overflow:hidden;box-shadow:0 8px 20px rgba(108,77,255,.3)}
+.strip b{display:block;font-size:15px;font-weight:900}
+.strip span{font-size:12.5px;opacity:.92;font-weight:600}
+.strip .gift{width:42px;height:42px;flex:none}
+.strip:after{content:"";position:absolute;top:0;bottom:0;width:60px;left:-80px;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-20deg);animation:sheen 4.5s ease-in-out 1.2s infinite}
+@keyframes sheen{0%{left:-80px}38%,100%{left:120%}}
+
+/* плитки игр */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.game{position:relative;border-radius:22px;min-height:150px;padding:14px;color:#fff;cursor:pointer;overflow:hidden;border:0;text-align:left;
+  background:linear-gradient(150deg,var(--c1),var(--c2));box-shadow:0 10px 22px color-mix(in srgb,var(--c2) 45%,transparent);transition:transform .15s}
+.game:active{transform:scale(.96)}
+.game .cov{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.game .shade{position:absolute;inset:0;background:linear-gradient(180deg,transparent 35%,rgba(0,0,0,.55))}
+.game .gi{position:absolute;right:-6px;top:-4px;width:92px;height:92px;filter:drop-shadow(0 8px 8px rgba(0,0,0,.25));animation:bob 3.6s ease-in-out infinite;animation-delay:var(--d,0s)}
+.game .gi svg{width:100%;height:100%}
+.game .gl{position:absolute;left:14px;right:12px;bottom:12px}
+.game .nm{font-weight:900;font-size:17px;line-height:1.1;text-shadow:0 1px 6px rgba(0,0,0,.25)}
+.game .ct{font-size:12px;font-weight:800;opacity:.92;margin-top:4px;display:flex;align-items:center}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-6px) rotate(3deg)}}
+.stagger .game{animation:pop .5s cubic-bezier(.2,.9,.3,1.2) both;animation-delay:calc(var(--i)*70ms)}
+@keyframes pop{from{opacity:0;transform:scale(.85) translateY(10px)}to{opacity:1;transform:none}}
+
+h3{margin:4px 0 14px;font-size:22px;font-weight:900;letter-spacing:-.2px;display:flex;align-items:center;gap:10px}
+h3 .hi{width:38px;height:38px;flex:none}
+h3 .hi svg{width:100%;height:100%}
+
+/* товары */
+.packs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pack{position:relative;background:var(--card);border:2px solid var(--line);border-radius:20px;padding:12px;text-align:left;cursor:pointer;box-shadow:var(--shadow);transition:transform .15s,border-color .15s}
+.pack:active{transform:scale(.96)}
+.pack.sel{border-color:var(--acc);background:var(--card2)}
+.pack .ico{position:relative;height:64px;margin-bottom:8px;display:flex;align-items:center;justify-content:center}
+.pack .ico svg{position:absolute;height:100%;width:auto;filter:drop-shadow(0 4px 4px rgba(40,20,120,.22))}
+.pack .ico .s1{height:62%;left:18%;top:26%}
+.pack .ico .s2{height:62%;right:18%;top:26%}
+.pack .ico .m{position:relative;height:100%}
+.pack .ico img{width:100%;height:100%;object-fit:cover;border-radius:14px}
+.pack .lb{font-weight:900;font-size:14.5px;line-height:1.2;min-height:34px}
+.pack .pr{margin-top:6px;display:inline-flex;align-items:center;background:color-mix(in srgb,var(--star) 22%,transparent);color:#b57600;border-radius:99px;padding:3px 10px;font-weight:900;font-size:14px}
+:root[data-theme=dark] .pack .pr{color:#ffd470}
+.pack .tick{position:absolute;right:8px;top:8px;width:22px;height:22px;border-radius:50%;background:var(--acc);display:none;align-items:center;justify-content:center}
+.pack.sel .tick{display:flex;animation:tickIn .25s cubic-bezier(.2,.9,.3,1.5)}
+@keyframes tickIn{from{transform:scale(0)}to{transform:scale(1)}}
+.tick svg{width:13px;height:13px}
+
+/* оформление */
+.panel{background:var(--card);border:1.5px solid var(--line);border-radius:22px;padding:16px;margin-top:16px;box-shadow:var(--shadow)}
+.panel.sheet{animation:sheetIn .28s cubic-bezier(.2,.9,.3,1.1)}
+@keyframes sheetIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+label{display:block;font-size:13px;font-weight:800;color:var(--mut);margin:0 0 6px}
+input,textarea{width:100%;background:var(--bg);color:var(--ink);border:2px solid var(--line);border-radius:14px;padding:13px 14px;font-size:16px;font-family:inherit;font-weight:700;outline:none;transition:border-color .15s}
+input:focus,textarea:focus{border-color:var(--acc)}
+textarea{resize:none;height:62px}
+.row{margin-bottom:14px}
+.hint{font-size:12.5px;color:var(--mut);margin-top:6px;line-height:1.4;font-weight:600}
+.promo{display:flex;gap:8px}
+.promo input{text-transform:uppercase}
+.mini{flex:none;border:0;border-radius:14px;padding:0 16px;font-weight:900;font-size:14px;background:var(--card2);color:var(--acc);cursor:pointer;border:2px solid var(--line)}
+:root[data-theme=dark] .mini{color:#cfc3ff}
+.msg{font-size:13px;font-weight:800;margin-top:6px}
+.msg.ok{color:var(--ok)} .msg.bad{color:var(--bad)}
+.bonus{display:none;align-items:center;gap:10px;background:var(--card2);border-radius:14px;padding:11px 12px;margin-bottom:14px;font-weight:800;font-size:14px;cursor:pointer}
+.bonus.on{display:flex}
+.bonus input{width:20px;height:20px;accent-color:var(--acc);margin:0;padding:0}
+.sum{border-top:2px dashed var(--line);padding-top:12px;margin:2px 0 14px}
+.sum div{display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px;color:var(--mut);font-weight:800}
+.sum .tot{color:var(--ink);font-size:18px;font-weight:900;margin:8px 0 0}
+.sum .tot b{color:#b57600}
+:root[data-theme=dark] .sum .tot b{color:#ffd470}
+.btn{position:relative;overflow:hidden;width:100%;border:0;border-radius:16px;padding:16px;font-size:17px;font-weight:900;color:#fff;background:linear-gradient(95deg,#6c4dff,#8e5bff 60%,#c25bff);cursor:pointer;box-shadow:0 10px 22px rgba(108,77,255,.35);transition:transform .12s}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.6}
+.btn.ghost{background:var(--card2);color:var(--acc);box-shadow:none;border:2px solid var(--line)}
+:root[data-theme=dark] .btn.ghost{color:#d3c9ff}
+.btn.pulse:not(:disabled):after{content:"";position:absolute;top:0;bottom:0;width:70px;left:-90px;background:linear-gradient(100deg,transparent,rgba(255,255,255,.4),transparent);transform:skewX(-20deg);animation:sheen 3.2s ease-in-out infinite}
+
+/* заказы */
+.order{background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.order .h{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;font-weight:900;font-size:15px}
+.order .m{color:var(--mut);font-size:13px;margin-top:6px;line-height:1.5}
+.badge{flex:none;font-size:11.5px;font-weight:900;padding:4px 10px;border-radius:99px;background:var(--card2);color:var(--mut)}
+.badge.paid{background:#fff1cc;color:#a56a00}.badge.done{background:#d3f7e6;color:#067a54}.badge.refunded{background:#ffdce3;color:#b4203d}
+:root[data-theme=dark] .badge.paid{background:#4a3a0c;color:#ffd470}
+:root[data-theme=dark] .badge.done{background:#0b4a35;color:#6ff0bc}
+:root[data-theme=dark] .badge.refunded{background:#55202c;color:#ff9db0}
+
+/* профиль */
+.me{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.ava{width:68px;height:68px;border-radius:50%;flex:none;background:linear-gradient(135deg,#6c4dff,#ff7ab6);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;overflow:hidden;border:3px solid var(--card);box-shadow:var(--shadow)}
+.ava img{width:100%;height:100%;object-fit:cover}
+.me .n{font-size:21px;font-weight:900;line-height:1.1}
+.me .u{color:var(--mut);font-size:13px;font-weight:700;margin-top:3px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.stat{background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:12px 8px;text-align:center;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:22px;font-weight:900}
+.stat span{font-size:12px;color:var(--mut);font-weight:800}
+.refbox{background:linear-gradient(135deg,#6c4dff,#a06bff 60%,#ff7ab6);color:#fff;border-radius:22px;padding:18px;box-shadow:0 10px 24px rgba(108,77,255,.3)}
+.refbox h4{margin:0 0 6px;font-size:18px;font-weight:900}
+.refbox p{margin:0 0 12px;font-size:13.5px;line-height:1.45;opacity:.95}
+.refbox .lnk{background:rgba(255,255,255,.18);border-radius:12px;padding:11px 12px;font-size:13px;word-break:break-all;font-weight:800;margin-bottom:10px}
+.refbox .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.refbox button{border:0;border-radius:13px;padding:12px;font-weight:900;font-size:14px;cursor:pointer;background:#fff;color:#5a3cd8}
+.refbox button.sec{background:rgba(255,255,255,.2);color:#fff}
+.steps{margin:14px 0 0;padding:0;list-style:none;font-size:13.5px;line-height:1.5}
+.steps li{display:flex;gap:10px;margin-bottom:8px;color:var(--ink);font-weight:700}
+.steps i{flex:none;width:24px;height:24px;border-radius:50%;background:var(--card2);color:var(--acc);display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:900;font-size:13px}
+
+/* навигация */
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;gap:4px;background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1.5px solid var(--line);padding:8px 10px calc(8px + env(safe-area-inset-bottom));z-index:5}
+.tab{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;font-weight:800;color:var(--mut);padding:6px 0;border-radius:14px;cursor:pointer;transition:background .2s,color .2s}
+.tab svg{width:23px;height:23px;transition:transform .2s}
+.tab.on{color:var(--acc);background:var(--card2)}
+:root[data-theme=dark] .tab.on{color:#d3c9ff}
+.tab.on svg{transform:translateY(-1px) scale(1.1)}
+
+.empty,.err{text-align:center;color:var(--mut);padding:34px 10px;font-size:15px;line-height:1.5;font-weight:700}
+.empty .big{width:84px;height:84px;margin:0 auto 10px}
+.err button{margin-top:14px}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(92px + env(safe-area-inset-bottom));background:var(--bad);color:#fff;padding:13px 16px;border-radius:14px;font-size:14.5px;font-weight:800;display:none;z-index:9;box-shadow:0 10px 24px rgba(239,69,101,.4)}
+.toast.show{display:block;animation:viewIn .2s}
+.success{text-align:center;padding:36px 10px}
+.success .big{width:110px;height:110px;margin:0 auto 6px;animation:tickIn .5s cubic-bezier(.2,.9,.3,1.4)}
+.success h3{justify-content:center}
+.success p{color:var(--mut);font-size:15px;line-height:1.5;margin:0 0 20px}
+
+/* скелетон */
+.sk{border-radius:22px;min-height:150px;background:linear-gradient(100deg,var(--card) 30%,var(--card2) 50%,var(--card) 70%);background-size:300% 100%;animation:shim 1.3s linear infinite;border:1.5px solid var(--line)}
+@keyframes shim{from{background-position:100% 0}to{background-position:-100% 0}}
+
+/* конфетти */
+.cf{position:fixed;top:-12px;width:9px;height:14px;border-radius:2px;z-index:20;pointer-events:none;animation:fall 2.4s cubic-bezier(.3,.6,.4,1) forwards}
+@keyframes fall{to{transform:translate3d(var(--x),105vh,0) rotate(var(--r));opacity:.9}}
+
+@media (prefers-reduced-motion:reduce){
+  *,*:before,*:after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo" id="logo"></div>
+  <button class="chip" id="chip" aria-label="Бонусы"></button>
+</div>
+<div id="app"></div>
+<div class="toast" id="toast" role="alert"></div>
+<nav class="tabs" id="tabs"></nav>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+const dark = tg ? tg.colorScheme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+document.documentElement.dataset.theme = dark ? "dark" : "light";
+try { if (tg) { tg.setHeaderColor(dark ? "#17144a" : "#f5f2ff"); tg.setBackgroundColor(dark ? "#17144a" : "#f5f2ff"); } } catch (e) {}
+
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+const params = new URLSearchParams(location.search);
+let API = (params.get("api") || store("api") || "").replace(/\/$/, "");
+if (params.get("api")) store("api", API);
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const buzz = t => { try { tg.HapticFeedback.impactOccurred(t || "light"); } catch (e) {} };
+
+/* ---------- Иконки (свои, векторные) ---------- */
+let _g = 0;
+function grad(c1, c2) {
+  const id = "g" + (++_g);
+  return { id, def: `<linearGradient id="${id}" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>`, u: `url(#${id})` };
+}
+const svg = inner => `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${inner}</svg>`;
+const ICON = {
+  gem(a, b) { const g = grad(a, b); return svg(`<defs>${g.def}</defs><path d="M32 6 52 22 32 58 12 22Z" fill="${g.u}"/><path d="M12 22 52 22 32 6Z" fill="#fff" opacity=".38"/><path d="M12 22 32 58 32 22Z" fill="#000" opacity=".13"/><path d="M19 20 27 12" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".85"/>`); },
+  diamond(a, b) { const g = grad(a, b); return svg(`<defs>${g.def}</defs><path d="M20 8H44L58 24L32 58L6 24Z" fill="${g.u}"/><path d="M6 24H58L44 8H20Z" fill="#fff" opacity=".35"/><path d="M20 8 26 24 32 58M44 8 38 24 32 58" stroke="#fff" stroke-width="2" opacity=".4" fill="none"/><path d="M14 20 20 13" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".85"/>`); },
+  coin() { const g = grad("#ffe066", "#f59e0b"); return svg(`<defs>${g.def}</defs><circle cx="32" cy="32" r="27" fill="${g.u}"/><circle cx="32" cy="32" r="20" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="3"/><text x="32" y="39" text-anchor="middle" font-family="Nunito,Arial" font-weight="900" font-size="19" fill="#b45309">UC</text><path d="M14 22A22 22 0 0 1 26 11" stroke="#fff" stroke-width="3.5" stroke-linecap="round" fill="none" opacity=".8"/>`); },
+  gold() { const g = grad("#fff0a0", "#f0a500"); const bar = (x, y) => `<path d="M${x + 4} ${y}H${x + 22}L${x + 26} ${y + 14}H${x}Z" fill="${g.u}"/><path d="M${x + 4} ${y}H${x + 22}L${x + 23} ${y + 4}H${x + 3}Z" fill="#fff" opacity=".5"/>`; return svg(`<defs>${g.def}</defs>${bar(4, 38)}${bar(34, 38)}${bar(19, 22)}`); },
+  crown() { const g = grad("#ffe36b", "#f59e0b"); return svg(`<defs>${g.def}</defs><path d="M8 46 10 20 23 32 32 13 41 32 54 20 56 46Z" fill="${g.u}"/><rect x="8" y="46" width="48" height="9" rx="3" fill="#d98600"/><circle cx="10" cy="19" r="4" fill="#ff5da2"/><circle cx="32" cy="12" r="4.5" fill="#4cc9f0"/><circle cx="54" cy="19" r="4" fill="#ff5da2"/><path d="M16 40 18 28" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".6"/>`); },
+  shield() { const g = grad("#7cf29a", "#12a150"); return svg(`<defs>${g.def}</defs><path d="M32 5 55 13V32C55 46 45 54 32 60 19 54 9 46 9 32V13Z" fill="${g.u}"/><path d="M32 13 47 18V32C47 42 41 48 32 52Z" fill="#fff" opacity=".28"/><path d="M32 22 35 29 42 29.5 36.5 34 38.5 41 32 37 25.5 41 27.5 34 22 29.5 29 29Z" fill="#fff"/>`); },
+  star() { const g = grad("#ffe36b", "#ff9f1a"); return svg(`<defs>${g.def}</defs><path d="M32 4 40 22.5 60 24.5 45 38 49.5 58 32 47.5 14.5 58 19 38 4 24.5 24 22.5Z" fill="${g.u}" stroke="#ffb703" stroke-width="2" stroke-linejoin="round"/><path d="M24 22 32 9" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".8"/>`); },
+  flame() { const g = grad("#ffb347", "#ff3d2e"); return svg(`<defs>${g.def}</defs><path d="M32 3C34 16 48 22 48 38C48 50 41 59 32 59C23 59 16 51 16 40C16 32 21 28 24 21C25 27 28 30 30 30C30 20 28 12 32 3Z" fill="${g.u}"/><path d="M32 59C26 59 22 54 22 48C22 42 28 39 29 33C34 38 41 42 41 48C41 54 37 59 32 59Z" fill="#ffe36b"/>`); },
+  crosshair() { const g = grad("#ffd36b", "#f08a00"); return svg(`<defs>${g.def}</defs><circle cx="32" cy="32" r="19" fill="none" stroke="${g.u}" stroke-width="6"/><path d="M32 3V17M32 47V61M3 32H17M47 32H61" stroke="${g.u}" stroke-width="6" stroke-linecap="round"/><circle cx="32" cy="32" r="4.5" fill="#ff4d4d"/>`); },
+  target() { return svg(`<circle cx="32" cy="32" r="27" fill="#7c5cff"/><circle cx="32" cy="32" r="20" fill="#fff"/><circle cx="32" cy="32" r="13" fill="#9a7bff"/><circle cx="32" cy="32" r="6" fill="#ff4d6d"/><path d="M15 14A24 24 0 0 1 28 7" stroke="#fff" stroke-width="3.5" stroke-linecap="round" fill="none" opacity=".7"/>`); },
+  ticket(a, b) { const g = grad(a || "#8f6bff", b || "#ff6fb1"); return svg(`<defs>${g.def}</defs><path d="M6 16H58V27A5 5 0 0 0 58 37V48H6V37A5 5 0 0 0 6 27Z" fill="${g.u}"/><path d="M40 16V48" stroke="#fff" stroke-width="2.5" stroke-dasharray="3 4" opacity=".7"/><path d="M23 22 26 29 33 29.5 27.5 34 29.5 41 23 37 16.5 41 18.5 34 13 29.5 20 29Z" fill="#fff"/>`); },
+  gift() { const g = grad("#ffe36b", "#ff9f1a"); return svg(`<defs>${g.def}</defs><rect x="8" y="26" width="48" height="30" rx="5" fill="#fff" opacity=".95"/><rect x="5" y="18" width="54" height="12" rx="4" fill="#fff"/><rect x="28" y="18" width="8" height="38" fill="${g.u}"/><path d="M32 18C24 18 18 14 20 9C23 4 31 11 32 18ZM32 18C40 18 46 14 44 9C41 4 33 11 32 18Z" fill="${g.u}"/>`); },
+  logo() { const g = grad("#9a7bff", "#6c4dff"); return svg(`<defs>${g.def}</defs><rect x="4" y="4" width="56" height="56" rx="16" fill="${g.u}"/><path d="M32 12 38 27 54 28.5 42 39 45.5 54 32 46 18.5 54 22 39 10 28.5 26 27Z" fill="#ffe36b"/>`); },
+  check() { return `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19 7"/></svg>`; },
+  box() { return svg(`<path d="M8 20 32 8 56 20V44L32 56 8 44Z" fill="#c9bcff"/><path d="M8 20 32 32 56 20" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M32 32V56" stroke="#fff" stroke-width="3"/>`); },
+  done() { const g = grad("#5eead4", "#10b981"); return svg(`<defs>${g.def}</defs><circle cx="32" cy="32" r="28" fill="${g.u}"/><path d="M19 33 28 42 46 23" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`); },
+};
+const STAR = `<svg class="st" viewBox="0 0 24 24"><path d="M12 1.8 15.1 8.6 22.5 9.4 17 14.4 18.6 21.7 12 18 5.4 21.7 7 14.4 1.5 9.4 8.9 8.6Z" fill="#ffb400" stroke="#e59400" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+const stars = n => `${n}${STAR}`;
+
+const GAME_ICON = { bs: "star", cr: "crown", coc: "shield", pubg: "crosshair", ff: "flame", so2: "target" };
+const GEMS = { bs: ["#8df5a6", "#16a34a"], cr: ["#ffa6dc", "#d946ef"], coc: ["#8fe0ff", "#2f7bff"], ff: ["#8ff0ff", "#0891d6"] };
+function packIcon(game, pack) {
+  if (/pass|plus|week|month/.test(pack.id)) return ICON.ticket();
+  if (game.id === "pubg") return ICON.coin();
+  if (game.id === "so2") return ICON.gold();
+  if (game.id === "ff") return ICON.diamond(...GEMS.ff);
+  return ICON.gem(...GEMS[game.id]);
+}
+function shade(hex, p) {
+  const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  const f = x => Math.max(0, Math.min(255, Math.round(p < 0 ? x * (1 + p) : x + (255 - x) * p)));
+  return "#" + [f(r), f(g), f(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+/* ---------- Состояние и API ---------- */
+let state = { tab: "shop", games: [], support: "@azikashop_support_bot", refPct: 5, game: null, pack: null, busy: false,
+  bonus: 0, promo: "", promoOk: false, useBonus: false, first: true, profile: null };
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.className = "toast show";
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.className = "toast", 3600);
+}
+async function api(path, body) {
+  if (!API) throw new Error("Адрес сервера не задан. Открой магазин через бота.");
+  const opt = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, initData: tg ? tg.initData : "" }) };
+  const r = await fetch(API + path, opt);
+  return r.json();
+}
+const imgUrl = p => API + p;
+
+function setBalance(n) {
+  state.bonus = n; const c = $("#chip");
+  c.innerHTML = `${STAR}<span>${n}</span>`; c.classList.toggle("on", n > 0);
+}
+$("#chip").onclick = () => switchTab("profile");
+$("#logo").innerHTML = `${ICON.logo()}<span>Azika Shop</span>`;
+
+const TAB_SVG = {
+  shop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
+  orders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l8-4 8 4v10l-8 4-8-4Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>',
+  profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4-6 8-6s7 1.5 8 6"/></svg>',
+  help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4Z"/></svg>',
+};
+const TABS = [["shop", "Магазин"], ["orders", "Заказы"], ["profile", "Профиль"], ["help", "Помощь"]];
+$("#tabs").innerHTML = TABS.map(([k, n]) => `<button class="tab${k === "shop" ? " on" : ""}" data-t="${k}">${TAB_SVG[k]}<span>${n}</span></button>`).join("");
+
+function render(html) { const a = $("#app"); a.innerHTML = `<div class="view">${html}</div>`; return a; }
+
+/* ---------- Магазин ---------- */
+function showHome() {
+  state.game = null; state.pack = null; setBack(false);
+  const stag = state.first ? " stagger" : ""; state.first = false;
+  const a = render(`
+    <div class="strip" id="strip" role="button" tabindex="0"><div class="gift">${ICON.gift()}</div>
+      <div><b>Зови друзей — получай ${state.refPct}% бонусами</b><span>Бонусы списываются при оплате заказов</span></div></div>
+    <div class="grid${stag}">${state.games.map((g, i) => {
+      const c = g.color; return `
+      <button class="game" style="--c1:${shade(c, .18)};--c2:${shade(c, -.28)};--i:${i};--d:${(i % 3) * .5}s" data-g="${esc(g.id)}">
+        ${g.img ? `<img class="cov" src="${esc(imgUrl(g.img))}" alt="">` : ""}${g.img ? '<div class="shade"></div>' : ""}
+        ${g.img ? "" : `<div class="gi">${ICON[GAME_ICON[g.id] || "star"]()}</div>`}
+        <div class="gl"><div class="nm">${esc(g.name)}</div><div class="ct">от ${stars(Math.min(...g.packs.map(p => p.stars)))}</div></div>
+      </button>`; }).join("")}</div>
+    ${state.games.length ? "" : `<div class="empty"><div class="big">${ICON.box()}</div>Каталог пока пуст.<br>Загляни позже.</div>`}`);
+  a.querySelectorAll(".game").forEach(el => el.onclick = () => { buzz(); showGame(el.dataset.g); });
+  $("#strip").onclick = () => switchTab("profile");
+}
+
+function showGame(id) {
+  const g = state.games.find(x => x.id === id); if (!g) return;
+  state.game = g; state.pack = null; state.promo = ""; state.promoOk = false; state.useBonus = false; setBack(true);
+  const saved = store("pid_" + g.kind) || "";
+  const n = g.packs.length;
+  const a = render(`
+    <h3><span class="hi">${ICON[GAME_ICON[g.id] || "star"]()}</span>${esc(g.name)}</h3>
+    <div class="packs">${g.packs.map((p, i) => {
+      const t = /pass|plus|week|month/.test(p.id) ? 1 : (i < n / 3 ? 1 : i < 2 * n / 3 ? 2 : 3);
+      const ic = packIcon(g, p);
+      return `<button class="pack" data-p="${esc(p.id)}"><span class="tick">${ICON.check()}</span>
+        <div class="ico">${p.img ? `<img src="${esc(imgUrl(p.img))}" alt="">` :
+          (t >= 2 ? `<span class="s1">${ic}</span>` : "") + (t >= 3 ? `<span class="s2">${ic}</span>` : "") + `<span class="m">${ic}</span>`}</div>
+        <div class="lb">${esc(p.label)}</div><div class="pr">${stars(p.stars)}</div></button>`; }).join("")}</div>
+    <div class="panel sheet" id="pay" style="display:none">
+      <div class="row"><label for="player">${esc(g.field)}</label>
+        <input id="player" autocomplete="off" autocapitalize="off" ${g.kind === "numeric" ? 'inputmode="numeric"' : ""} value="${esc(saved)}" placeholder="${g.kind === "numeric" ? "123456789" : "#ABC123 или e-mail"}">
+        <div class="hint">${g.kind === "numeric" ? "ID найдёшь в профиле игры. Проверь внимательно: пополнение пойдёт на этот ID." : "Тег виден в профиле игры. Для входа админ может написать тебе в Telegram."}</div></div>
+      <div class="row"><label for="comment">Комментарий (необязательно)</label><textarea id="comment" maxlength="200" placeholder="Сервер, ник или удобное время"></textarea></div>
+      <div class="row"><label for="promo">Промокод</label>
+        <div class="promo"><input id="promo" autocomplete="off" autocapitalize="characters" placeholder="Есть промокод?"><button class="mini" id="promoBtn">Применить</button></div>
+        <div class="msg" id="promoMsg"></div></div>
+      <label class="bonus" id="bonusRow"><input type="checkbox" id="useBonus"><span>Списать бонусы: <b id="bonusAmt"></b></span></label>
+      <div class="sum" id="sum"></div>
+      <button class="btn pulse" id="payBtn">Оплатить Stars</button>
+    </div>`);
+  a.querySelectorAll(".pack").forEach(el => el.onclick = () => {
+    buzz();
+    a.querySelectorAll(".pack").forEach(x => x.classList.remove("sel")); el.classList.add("sel");
+    state.pack = g.packs.find(p => p.id === el.dataset.p);
+    const pay = $("#pay"); pay.style.display = "block";
+    $("#bonusRow").classList.toggle("on", state.bonus > 1);
+    requote();
+    setTimeout(() => pay.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
+  });
+  $("#promoBtn").onclick = applyPromo;
+  $("#useBonus").onchange = e => { state.useBonus = e.target.checked; requote(); };
+  $("#payBtn").onclick = pay;
+}
+
+let quoteSeq = 0;
+async function requote() {
+  if (!state.pack) return;
+  const seq = ++quoteSeq;
+  drawSum({ base: state.pack.stars, discount: 0, bonus_used: 0, total: state.pack.stars });
+  try {
+    const r = await api("/api/quote", { pack: state.pack.id, promo: state.promo, use_bonus: state.useBonus });
+    if (seq !== quoteSeq || !r.ok) return;
+    drawSum(r);
+    const pm = $("#promoMsg");
+    if (state.promo) { pm.className = "msg " + (r.promo_ok ? "ok" : "bad"); pm.textContent = r.promo_msg; state.promoOk = r.promo_ok; }
+    $("#bonusAmt").innerHTML = stars(Math.max(0, Math.min(r.bonus, (r.base - r.discount) - 1)));
+    if (r.bonus !== state.bonus) setBalance(r.bonus);
+  } catch (e) { /* цена из каталога уже показана */ }
+}
+function drawSum(r) {
+  $("#sum").innerHTML = `
+    <div><span>Цена</span><span>${stars(r.base)}</span></div>
+    ${r.discount ? `<div><span>Промокод</span><span>−${stars(r.discount)}</span></div>` : ""}
+    ${r.bonus_used ? `<div><span>Бонусы</span><span>−${stars(r.bonus_used)}</span></div>` : ""}
+    <div class="tot"><span>К оплате</span><b>${stars(r.total)}</b></div>`;
+}
+function applyPromo() {
+  const v = $("#promo").value.trim().toUpperCase();
+  state.promo = v;
+  if (!v) { $("#promoMsg").textContent = ""; }
+  buzz(); requote();
+}
+
+async function pay() {
+  if (state.busy || !state.pack || !state.game) return;
+  const player = $("#player").value.trim();
+  if (!player) { toast("Введи ID игрока"); $("#player").focus(); return; }
+  state.busy = true; const btn = $("#payBtn"); btn.disabled = true; btn.textContent = "Создаю счёт…";
+  try {
+    const r = await api("/api/invoice", { pack: state.pack.id, player, comment: $("#comment").value.trim(),
+      promo: state.promoOk ? state.promo : "", use_bonus: state.useBonus });
+    if (!r.ok) { toast(r.msg || "Не получилось создать счёт"); return; }
+    store("pid_" + state.game.kind, player);
+    if (!tg || !tg.openInvoice) { location.href = r.link; return; }
+    tg.openInvoice(r.link, st => {
+      if (st === "paid") showSuccess(r.order);
+      else if (st === "failed") toast("Оплата не прошла. Попробуй ещё раз");
+    });
+  } catch (e) { toast(e.message || "Нет связи с сервером"); }
+  finally { state.busy = false; btn.disabled = false; btn.textContent = "Оплатить Stars"; }
+}
+
+function confetti() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const cols = ["#6c4dff", "#ff7ab6", "#ffb400", "#38bdf8", "#10b981", "#ff5d6c"];
+  for (let i = 0; i < 46; i++) {
+    const s = document.createElement("span"); s.className = "cf";
+    s.style.left = Math.random() * 100 + "vw"; s.style.background = cols[i % cols.length];
+    s.style.setProperty("--x", (Math.random() * 120 - 60) + "px"); s.style.setProperty("--r", (Math.random() * 720 - 360) + "deg");
+    s.style.animationDelay = Math.random() * .5 + "s"; s.style.animationDuration = 1.8 + Math.random() * 1.2 + "s";
+    document.body.appendChild(s); setTimeout(() => s.remove(), 3600);
+  }
+}
+function showSuccess(order) {
+  setBack(false); confetti();
+  try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) {}
+  render(`<div class="success"><div class="big">${ICON.done()}</div><h3>Оплата получена!</h3>
+    <p>Заказ №${order}. Админ пополнит аккаунт в ближайшее время, а бот пришлёт уведомление.</p>
+    <button class="btn" id="toOrders">Мои заказы</button></div>`);
+  $("#toOrders").onclick = () => switchTab("orders");
+  api("/api/profile", {}).then(r => { if (r.ok) setBalance(r.bonus); }).catch(() => {});
+}
+
+/* ---------- Заказы ---------- */
+async function showOrders() {
+  setBack(false);
+  render(`<h3>Мои заказы</h3><div class="sk" style="min-height:84px;margin-bottom:10px"></div><div class="sk" style="min-height:84px"></div>`);
+  try {
+    const r = await api("/api/orders", {});
+    if (!r.ok) throw new Error(r.msg || "Ошибка");
+    render(r.orders.length ? `<h3>Мои заказы</h3>` + r.orders.map(o => `
+      <div class="order"><div class="h"><span>№${o.id} · ${esc(o.game)}</span><span class="badge ${esc(o.status)}">${esc(o.status_text)}</span></div>
+      <div class="m">${esc(o.label)} · ${stars(o.stars)}<br>Игрок: ${esc(o.player)} · ${esc(o.created)}</div></div>`).join("")
+      : `<div class="empty"><div class="big">${ICON.box()}</div>Заказов пока нет.<br>Выбери игру и сделай первый.<br><br><button class="btn" id="goShop">В магазин</button></div>`);
+    const b = $("#goShop"); if (b) b.onclick = () => switchTab("shop");
+  } catch (e) { render(`<div class="err">${esc(e.message || "Нет связи с сервером")}<br><button class="btn ghost" id="retry">Повторить</button></div>`); $("#retry").onclick = showOrders; }
+}
+
+/* ---------- Профиль и рефералка ---------- */
+async function showProfile() {
+  setBack(false);
+  render(`<div class="sk" style="min-height:90px;margin-bottom:12px"></div><div class="sk" style="min-height:200px"></div>`);
+  try {
+    const r = await api("/api/profile", {});
+    if (!r.ok) throw new Error(r.msg || "Ошибка");
+    setBalance(r.bonus); state.profile = r;
+    const ini = esc((r.name || "?").trim().charAt(0).toUpperCase());
+    const a = render(`
+      <div class="me"><div class="ava">${r.photo ? `<img src="${esc(r.photo)}" alt="">` : ini}</div>
+        <div><div class="n">${esc(r.name || "Игрок")}</div><div class="u">${r.username ? "@" + esc(r.username) : "ID " + (tg && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : "")}</div></div></div>
+      <div class="stats">
+        <div class="stat"><b>${r.orders}</b><span>заказов</span></div>
+        <div class="stat"><b>${r.spent}</b><span>потрачено ${STAR}</span></div>
+        <div class="stat"><b>${r.bonus}</b><span>бонусов ${STAR}</span></div></div>
+      <div class="refbox"><h4>Приглашай друзей</h4>
+        <p>Друг оплачивает заказ, а ты получаешь ${r.ref_pct}% от суммы бонусами. Бонусами можно оплатить часть следующего заказа.</p>
+        <div class="lnk" id="lnk">${esc(r.ref_link)}</div>
+        <div class="two"><button id="cp">Скопировать</button><button class="sec" id="sh">Поделиться</button></div></div>
+      <div class="stats" style="margin-top:12px"><div class="stat"><b>${r.ref_count}</b><span>друзей пришло</span></div>
+        <div class="stat" style="grid-column:span 2"><b>${r.ref_earned}</b><span>заработано бонусов ${STAR}</span></div></div>
+      <div class="panel"><b>Как это работает</b><ul class="steps">
+        <li><i>1</i>Скопируй свою ссылку и отправь другу</li>
+        <li><i>2</i>Друг заходит по ней и делает заказ</li>
+        <li><i>3</i>Тебе приходят бонусы, а в магазине появляется галочка «Списать бонусы»</li></ul></div>`);
+    $("#cp").onclick = () => copy(r.ref_link);
+    $("#sh").onclick = () => {
+      const u = "https://t.me/share/url?url=" + encodeURIComponent(r.ref_link) + "&text=" + encodeURIComponent("Пополняю игры в Azika Shop. Заходи!");
+      tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank");
+    };
+  } catch (e) { render(`<div class="err">${esc(e.message || "Нет связи с сервером")}<br><button class="btn ghost" id="retry">Повторить</button></div>`); $("#retry").onclick = showProfile; }
+}
+function copy(t) {
+  const done = () => { buzz(); const b = $("#cp"); if (b) { b.textContent = "Скопировано"; setTimeout(() => b.textContent = "Скопировать", 1600); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
+  function fallback() { const x = document.createElement("textarea"); x.value = t; document.body.appendChild(x); x.select(); try { document.execCommand("copy"); done(); } catch (e) {} x.remove(); }
+}
+
+/* ---------- Помощь ---------- */
+function showHelp() {
+  setBack(false);
+  const u = state.support.replace(/^@/, "");
+  render(`<h3>Помощь</h3>
+    <div class="panel" style="margin-top:0"><p style="margin:0 0 12px;line-height:1.5;font-size:15px">Вопрос по заказу? Напиши в поддержку и укажи номер заказа.</p>
+      <button class="btn" id="sup">Написать ${esc(state.support)}</button></div>
+    <div class="panel"><b>Как это работает</b><ul class="steps">
+      <li><i>1</i>Выбираешь игру и товар</li><li><i>2</i>Вводишь ID игрока</li><li><i>3</i>Платишь Telegram Stars</li>
+      <li><i>4</i>Админ пополняет аккаунт вручную и присылает уведомление</li>
+      <li><i>5</i>Если выполнить нельзя, Stars вернутся автоматически</li></ul></div>`);
+  $("#sup").onclick = () => { const l = "https://t.me/" + u; tg && tg.openTelegramLink ? tg.openTelegramLink(l) : window.open(l, "_blank"); };
+}
+
+/* ---------- Навигация ---------- */
+function setBack(on) { if (tg && tg.BackButton) tg.BackButton[on ? "show" : "hide"](); }
+if (tg && tg.BackButton) tg.BackButton.onClick(() => { if (state.game) showHome(); });
+
+function switchTab(t) {
+  state.tab = t; state.game = null; window.scrollTo(0, 0);
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.t === t));
+  ({ shop: showHome, orders: showOrders, profile: showProfile, help: showHelp })[t]();
+}
+document.querySelectorAll(".tab").forEach(el => el.onclick = () => { buzz(); switchTab(el.dataset.t); });
+
+async function init() {
+  render(`<div class="grid">${'<div class="sk"></div>'.repeat(6)}</div>`);
+  try {
+    const r = await api("/api/catalog");
+    if (!r.ok) throw new Error("Каталог недоступен");
+    state.games = r.games; state.support = r.support || state.support; state.refPct = r.ref_pct || state.refPct;
+    showHome();
+    if (tg && tg.initData) api("/api/profile", {}).then(p => { if (p.ok) setBalance(p.bonus); }).catch(() => {});
+  } catch (e) {
+    render(`<div class="err">Не удалось загрузить каталог.<br>${esc(e.message || "")}<br><button class="btn ghost" id="retry">Повторить</button></div>`);
+    $("#retry").onclick = init;
+  }
+}
+init();
+</script>
+</body>
+</html>
