@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Azika Shop</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:#0d0f17; --card:#171a26; --card2:#1e2232; --line:#2a2f45; --text:#f2f4fb; --muted:#8b93b0;
+  --acc:#7c5cff; --acc2:#4cc9f0; --ok:#35d07f; --bad:#ff5d6c; --warn:#ffb020;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+body{padding:0 16px calc(84px + env(safe-area-inset-bottom));min-height:100vh}
+.top{display:flex;align-items:center;justify-content:space-between;padding:18px 0 10px}
+.logo{font-size:22px;font-weight:800;letter-spacing:.2px}
+.logo span{background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+.hero{background:linear-gradient(135deg,#2a1d6e,#123a5c);border-radius:20px;padding:18px;margin-bottom:18px;position:relative;overflow:hidden}
+.hero h2{margin:0 0 6px;font-size:18px}
+.hero p{margin:0;font-size:13px;color:#cfd6f5;line-height:1.45}
+.hero:after{content:"⭐";position:absolute;right:-6px;bottom:-22px;font-size:90px;opacity:.18}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.game{border-radius:18px;padding:16px 14px;min-height:112px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;border:1px solid var(--line);background:var(--card);position:relative;overflow:hidden;transition:transform .12s}
+.game:active{transform:scale(.97)}
+.game .em{font-size:34px;line-height:1}
+.game .nm{font-weight:700;font-size:15px;margin-top:10px}
+.game .ct{color:var(--muted);font-size:12px;margin-top:2px}
+.game:before{content:"";position:absolute;inset:0;background:linear-gradient(160deg,var(--c) 0%,transparent 70%);opacity:.22}
+.game>*{position:relative}
+h3{margin:4px 0 12px;font-size:19px}
+.back{display:none}
+.packs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pack{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px 12px;cursor:pointer;transition:border-color .12s,transform .12s}
+.pack:active{transform:scale(.97)}
+.pack.sel{border-color:var(--acc);background:var(--card2)}
+.pack .lb{font-weight:700;font-size:14px}
+.pack .pr{margin-top:8px;color:var(--warn);font-weight:700;font-size:15px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-top:16px}
+label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
+input,textarea{width:100%;background:var(--bg);border:1.5px solid var(--line);color:var(--text);border-radius:12px;padding:13px 14px;font-size:16px;outline:none;font-family:inherit}
+input:focus,textarea:focus{border-color:var(--acc)}
+textarea{resize:none;height:64px}
+.row{margin-bottom:14px}
+.hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.4}
+.btn{width:100%;border:0;border-radius:14px;padding:15px;font-size:16px;font-weight:700;color:#fff;background:linear-gradient(90deg,var(--acc),#5a7bff);cursor:pointer}
+.btn:disabled{opacity:.5}
+.sum{display:flex;justify-content:space-between;align-items:center;margin:2px 0 14px;font-size:15px}
+.sum b{color:var(--warn);font-size:18px}
+.order{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+.order .h{display:flex;justify-content:space-between;font-weight:700;font-size:14px}
+.order .m{color:var(--muted);font-size:12px;margin-top:6px;line-height:1.5}
+.badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;background:#2a2f45;color:var(--muted)}
+.badge.paid{background:#3a2d0b;color:var(--warn)} .badge.done{background:#0c3a25;color:var(--ok)}
+.badge.refunded{background:#3d1820;color:var(--bad)}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:rgba(13,15,23,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:8px 10px calc(8px + env(safe-area-inset-bottom));gap:6px}
+.tab{flex:1;text-align:center;font-size:11px;color:var(--muted);padding:6px 0;border-radius:12px;cursor:pointer}
+.tab .i{font-size:20px;display:block}
+.tab.on{color:var(--text);background:var(--card2)}
+.empty,.err{text-align:center;color:var(--muted);padding:40px 10px;font-size:14px;line-height:1.5}
+.err button{margin-top:14px;padding:10px 20px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:14px}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(86px + env(safe-area-inset-bottom));background:#2a1216;border:1px solid var(--bad);color:#ffd5da;padding:12px 14px;border-radius:12px;font-size:14px;display:none;z-index:9}
+.success{text-align:center;padding:40px 10px}
+.success .big{font-size:64px}
+.success h3{margin:12px 0 8px}
+.success p{color:var(--muted);font-size:14px;line-height:1.5;margin:0 0 20px}
+.link{color:var(--acc2);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="top"><div class="logo"><span>Azika</span> Shop</div></div>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<div class="tabs">
+  <div class="tab on" data-t="shop"><span class="i">🛒</span>Магазин</div>
+  <div class="tab" data-t="orders"><span class="i">📦</span>Заказы</div>
+  <div class="tab" data-t="help"><span class="i">💬</span>Поддержка</div>
+</div>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("#0d0f17"); tg.setBackgroundColor("#0d0f17"); } catch(e){} }
+
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch(e){ return null; } }
+const params = new URLSearchParams(location.search);
+let API = (params.get("api") || store("api") || "").replace(/\/$/, "");
+if (params.get("api")) store("api", API);
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let state = { tab: "shop", games: [], support: "@azikavpn_support_bot", game: null, pack: null, busy: false };
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = "none", 3500);
+}
+async function api(path, body) {
+  if (!API) throw new Error("Адрес сервера не задан. Открой магазин из бота.");
+  const opt = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, initData: tg ? tg.initData : "" }) };
+  const r = await fetch(API + path, opt);
+  return r.json();
+}
+
+/* ---------- Экраны ---------- */
+function showHome() {
+  state.game = null; state.pack = null; setBack(false);
+  const g = state.games;
+  $("#app").innerHTML = `
+    <div class="hero"><h2>Пополнение игр за Telegram Stars</h2>
+    <p>Выбери игру и товар, оплати Stars — админ пополнит аккаунт и пришлёт уведомление.</p></div>
+    <div class="grid">${g.map(x => `
+      <div class="game" style="--c:${esc(x.color)}" data-g="${esc(x.id)}">
+        <div class="em">${x.emoji}</div>
+        <div><div class="nm">${esc(x.name)}</div><div class="ct">${x.packs.length} товаров</div></div>
+      </div>`).join("")}</div>
+    ${g.length ? "" : '<div class="empty">Каталог пока пуст</div>'}`;
+  document.querySelectorAll(".game").forEach(el => el.onclick = () => showGame(el.dataset.g));
+}
+
+function showGame(id) {
+  const g = state.games.find(x => x.id === id); if (!g) return;
+  state.game = g; state.pack = null; setBack(true);
+  const saved = store("pid_" + g.kind) || "";
+  $("#app").innerHTML = `
+    <h3>${g.emoji} ${esc(g.name)}</h3>
+    <div class="packs">${g.packs.map(p => `
+      <div class="pack" data-p="${esc(p.id)}"><div class="lb">${esc(p.label)}</div><div class="pr">${p.stars} ⭐</div></div>`).join("")}</div>
+    <div class="panel" id="pay" style="display:none">
+      <div class="row"><label>${esc(g.field)}</label>
+        <input id="player" autocomplete="off" autocapitalize="off" ${g.kind === "numeric" ? 'inputmode="numeric"' : ""} value="${esc(saved)}" placeholder="${g.kind === "numeric" ? "123456789" : "#ABC123 или e-mail"}">
+        <div class="hint">${g.kind === "numeric" ? "Найди ID в профиле игры. Проверь внимательно — пополнение пойдёт на этот ID." :
+          "Тег виден в профиле. Для входа админ может написать тебе в Telegram."}</div></div>
+      <div class="row"><label>Комментарий (необязательно)</label><textarea id="comment" maxlength="200" placeholder="Например: сервер, ник, удобное время"></textarea></div>
+      <div class="sum"><span id="sumName"></span><b id="sumPrice"></b></div>
+      <button class="btn" id="payBtn">Оплатить Stars ⭐</button>
+    </div>`;
+  document.querySelectorAll(".pack").forEach(el => el.onclick = () => {
+    document.querySelectorAll(".pack").forEach(x => x.classList.remove("sel")); el.classList.add("sel");
+    state.pack = g.packs.find(p => p.id === el.dataset.p);
+    $("#pay").style.display = "block";
+    $("#sumName").textContent = g.name + " · " + state.pack.label;
+    $("#sumPrice").textContent = state.pack.stars + " ⭐";
+    setTimeout(() => $("#pay").scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+  });
+  $("#payBtn").onclick = pay;
+}
+
+async function pay() {
+  if (state.busy || !state.pack || !state.game) return;
+  const player = $("#player").value.trim();
+  if (!player) { toast("Введи ID игрока"); return; }
+  state.busy = true; const btn = $("#payBtn"); btn.disabled = true; btn.textContent = "Создаю счёт…";
+  try {
+    const r = await api("/api/invoice", { pack: state.pack.id, player, comment: $("#comment").value.trim() });
+    if (!r.ok) { toast(r.msg || "Ошибка"); return; }
+    store("pid_" + state.game.kind, player);
+    if (!tg || !tg.openInvoice) { location.href = r.link; return; }
+    tg.openInvoice(r.link, st => {
+      if (st === "paid") showSuccess(r.order);
+      else if (st === "failed") toast("Оплата не прошла");
+    });
+  } catch (e) { toast(e.message || "Нет связи с сервером"); }
+  finally { state.busy = false; btn.disabled = false; btn.textContent = "Оплатить Stars ⭐"; }
+}
+
+function showSuccess(order) {
+  setBack(false);
+  try { tg.HapticFeedback.notificationOccurred("success"); } catch(e){}
+  $("#app").innerHTML = `<div class="success"><div class="big">✅</div><h3>Оплата получена!</h3>
+    <p>Заказ #${order}. Админ пополнит аккаунт в ближайшее время — бот пришлёт уведомление.</p>
+    <button class="btn" id="toOrders">Мои заказы</button></div>`;
+  $("#toOrders").onclick = () => switchTab("orders");
+}
+
+async function showOrders() {
+  setBack(false);
+  $("#app").innerHTML = '<div class="empty">Загрузка…</div>';
+  try {
+    const r = await api("/api/orders", {});
+    if (!r.ok) throw new Error(r.msg || "Ошибка");
+    $("#app").innerHTML = r.orders.length ? `<h3>Мои заказы</h3>` + r.orders.map(o => `
+      <div class="order"><div class="h"><span>#${o.id} · ${esc(o.game)}</span><span class="badge ${esc(o.status)}">${esc(o.status_text)}</span></div>
+      <div class="m">${esc(o.label)} · ${o.stars} ⭐<br>Игрок: ${esc(o.player)} · ${esc(o.created)}</div></div>`).join("")
+      : '<div class="empty">Заказов пока нет.<br>Выбери игру во вкладке «Магазин».</div>';
+  } catch (e) { $("#app").innerHTML = `<div class="err">${esc(e.message || "Нет связи")}<br><button onclick="showOrders()">Повторить</button></div>`; }
+}
+
+function showHelp() {
+  setBack(false);
+  const u = state.support.replace(/^@/, "");
+  $("#app").innerHTML = `<h3>Поддержка</h3><div class="panel" style="margin-top:0">
+    <p style="margin:0 0 12px;line-height:1.5;font-size:14px">Вопрос по заказу? Напиши нам и укажи номер заказа.</p>
+    <button class="btn" onclick="(tg&&tg.openTelegramLink)?tg.openTelegramLink('https://t.me/${esc(u)}'):location.href='https://t.me/${esc(u)}'">Написать в поддержку</button></div>
+    <div class="panel"><b>Как это работает</b><p class="hint" style="font-size:13px">1. Выбираешь игру и товар<br>2. Вводишь ID игрока<br>3. Платишь Telegram Stars<br>4. Админ пополняет аккаунт вручную и присылает уведомление<br>5. Если выполнить нельзя — Stars вернутся автоматически</p></div>`;
+}
+
+/* ---------- Навигация ---------- */
+function setBack(on) {
+  if (!tg || !tg.BackButton) return;
+  tg.BackButton[on ? "show" : "hide"]();
+}
+if (tg && tg.BackButton) tg.BackButton.onClick(() => { if (state.game) showHome(); });
+
+function switchTab(t) {
+  state.tab = t; state.game = null;
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.t === t));
+  if (t === "shop") showHome(); else if (t === "orders") showOrders(); else showHelp();
+}
+document.querySelectorAll(".tab").forEach(el => el.onclick = () => switchTab(el.dataset.t));
+
+async function init() {
+  $("#app").innerHTML = '<div class="empty">Загрузка каталога…</div>';
+  try {
+    const r = await api("/api/catalog");
+    if (!r.ok) throw new Error("Каталог недоступен");
+    state.games = r.games; state.support = r.support || state.support;
+    showHome();
+  } catch (e) {
+    $("#app").innerHTML = `<div class="err">Не удалось загрузить каталог.<br>${esc(e.message || "")}<br><button onclick="init()">Повторить</button></div>`;
+  }
+}
+init();
+</script>
+</body>
+</html>
