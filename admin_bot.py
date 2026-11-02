@@ -321,6 +321,9 @@ async def do_seller_act(uid: int, act: str, text: str = "") -> tuple[bool, str]:
         with sdb() as c:
             c.execute("UPDATE sellers SET review=? WHERE user_id=?", (1 if on else 0, uid))
             c.commit()
+        with sdb() as c:   # сразу заводим чат, чтобы продавец появился в «Чатах»
+            c.execute("INSERT INTO admin_msgs(seller_id,from_admin,text,created) VALUES(?,1,?,?)", (uid, "🔍 Ваш аккаунт вызван на проверку. Товары скрыты из магазина. Ответьте на вопросы администрации здесь." if on else "✅ Проверка завершена, товары вернулись в магазин.", int(time.time())))
+            c.commit()
         if on:
             await notify_seller(uid, "🔍 <b>Твой аккаунт вызван на проверку.</b>\nТвои товары временно скрыты из магазина, новые покупки недоступны. "
                                      "Уже оплаченные заказы выполняй как обычно. Администратор напишет тебе в Azika Seller → Профиль → Сообщения.")

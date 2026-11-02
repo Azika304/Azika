@@ -215,10 +215,11 @@ const ICO = {
 };
 function drawTabs() {
   const T = [["orders", "Заказы"], ["offers", "Товары"], ["promos", "Промо"], ["chats", "Чаты"], ["money", "Профиль"]];
-  const un = S.me ? S.me.unread || 0 : 0;
+  const un = S.me ? (S.me.unread || 0) + (S.me.admin_unread || 0) : 0;
   $("#tabs").innerHTML = T.map(([k, l]) => `<button data-t="${k}" class="${S.tab === k ? "on" : ""}"><svg viewBox="0 0 24 24">${ICO[k]}</svg>${l}${k === "chats" && un ? `<i>${un}</i>` : ""}</button>`).join("");
   $("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => { if (S.tab === b.dataset.t) return; haptic(); const T = ["orders", "offers", "promos", "chats", "money"]; S.dir = T.indexOf(b.dataset.t) - T.indexOf(S.tab); S.tab = b.dataset.t; go(); });
 }
+setInterval(async () => { if (document.hidden || !S.me) return; try { const m = await api("/api/seller/me", {}); if (m.ok) { S.me.unread = m.unread || 0; S.me.admin_unread = m.admin_unread || 0; drawTabs(); } } catch (e) {} }, 25000);
 function go() { try { go0(); } catch (e) { view(`<div class="err">Ошибка: ${esc(e.message || e)}<br><button class="btn ghost" onclick="go()">Повторить</button></div>`); } }
 function go0() { drawTabs(); $("#ind").style.transform = `translateX(${["orders", "offers", "promos", "chats", "money"].indexOf(S.tab) * 100}%)`; ({ orders: showOrders, offers: showOffers, promos: showPromos, chats: showChats, money: showMoney })[S.tab](); }
 
@@ -370,11 +371,14 @@ async function showChats() {
   view('<div class="sk"></div>');
   try {
     const r = await api("/api/chat/orders", {}); const list = (r.chats || []).filter(c => c.role === "seller");
+    try { const m = await api("/api/seller/me", {}); if (m.ok && S.me) S.me.admin_unread = m.admin_unread || 0; } catch (e) {}
     S.me && (S.me.unread = list.reduce((a, c) => a + c.unread, 0)); drawTabs();
-    view(`<div class="sect"><h3>Чаты с покупателями</h3><span>${list.length}</span></div><div class="card">`
+    const au = S.me ? S.me.admin_unread || 0 : 0;
+    view(`<div class="sect"><h3>Чаты</h3><span>${list.length + 1}</span></div><div class="card"><div class="cli" id="admRow"><span class="mav" style="background:linear-gradient(135deg,#6366f1,#818cf8)">🛠</span><div class="tx">Администрация<small>${au ? `Новых сообщений: ${au}` : "Сообщения от магазина"}</small></div>${au ? `<i>${au}</i>` : ""}</div>`
       + (list.length ? list.map(c => `<div class="cli" data-o="${c.order}" data-l="${esc(c.label)}">${avEl(c.av, c.peer)}<div class="tx">${esc(c.peer)} · #${c.order}<small>${esc(c.last || c.label)}</small></div>${c.unread ? `<i>${c.unread}</i>` : ""}</div>`).join("")
         : '<div class="empty">Чаты появятся после первых оплаченных заказов</div>') + `</div><div class="note">Общение только здесь и в боте. Ссылки, @username и телефоны блокируются.</div>`);
-    document.querySelectorAll(".cli").forEach(el => el.onclick = () => openChat(+el.dataset.o, "Покупатель", el.dataset.l));
+    document.querySelectorAll(".cli[data-o]").forEach(el => el.onclick = () => openChat(+el.dataset.o, "Покупатель", el.dataset.l));
+    $("#admRow").onclick = () => { haptic(); openAdminChat(); };
   } catch (e) { view('<div class="err">Нет связи</div>'); }
 }
 const seenHtml = (ts, on) => { if (on) return '<span class="onl">● онлайн</span>'; if (!ts) return ""; const m = Math.max(1, (Date.now() / 1000 - ts) / 60 | 0); return "был(а) " + (m < 60 ? m + " мин" : m < 1440 ? (m / 60 | 0) + " ч" : (m / 1440 | 0) + " дн") + " назад"; };
@@ -446,6 +450,7 @@ async function openAdminChat() {
   let last = "";
   const load = async () => { try {
     const r = await api("/api/seller/admin_chat", {}); if (!r.ok || !$("#chBox")) return;
+    if (S.me && S.me.admin_unread) { S.me.admin_unread = 0; drawTabs(); }
     if ($("#admS")) { const sn = seenHtml(r.admin_seen, r.admin_online); if (sn) $("#admS").innerHTML = sn; }
     const sig = r.msgs.map(m => m.id + (m.read ? "r" : "")).join(","); if (sig === last) return; last = sig;
     const box = $("#chBox"), end = box.scrollHeight - box.scrollTop - box.clientHeight < 60 || !box.dataset.ok;

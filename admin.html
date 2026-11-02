@@ -182,7 +182,7 @@ function openSeller(s) {
   $("#gochat").onclick = () => openChat(s.id);
   document.querySelectorAll("#sh [data-a]").forEach(b => b.onclick = async () => {
     const a = b.dataset.a, j = await api("seller_act", { id: s.id, act: a, text: "" });
-    if (j.ok) { haptic("medium"); toast(j.msg); if (j.seller) openSeller(j.seller); loadSellers(); }
+    if (j.ok) { haptic("medium"); toast(j.msg); loadSellers(); if (a === "review_on") openChat(s.id); else if (j.seller) openSeller(j.seller); }
   });
 }
 
@@ -267,6 +267,7 @@ async function viewMore() {
   $("#pmb").onclick = async () => { const r = await api("pause", { which: "all", text: $("#pm").value }); if (r.ok) toast("Текст сохранён"); };
 }
 
+setInterval(() => { if (!document.hidden) api("overview", { quiet: true }).then(j => { if (j.ok) { counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge(); } }); }, 25000);
 setTab("q");
 api("overview", { quiet: true }).then(j => { if (j.ok) { counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge(); } });
 </script>
