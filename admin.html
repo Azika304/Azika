@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Azika Admin</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#0b0b1a;--card:#15152b;--card2:#1c1c38;--line:#2a2a4d;--tx:#f1f1ff;--mu:#8e8eb8;--ac:#6366f1;--ac2:#818cf8;--ok:#22c55e;--no:#ef4444;--wa:#f59e0b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 -apple-system,Segoe UI,Roboto,sans-serif}
+body{padding:0 16px calc(96px + env(safe-area-inset-bottom));min-height:100vh;background:radial-gradient(600px 300px at 80% -50px,#312e8155,transparent),var(--bg)}
+h1{font-size:22px;margin:18px 0 12px;display:flex;align-items:center;gap:10px}
+h1 b{color:var(--ac2)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}
+.row{display:flex;align-items:center;gap:12px}
+.grow{flex:1;min-width:0}
+.mu{color:var(--mu);font-size:13px}
+.t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mav{position:relative;width:44px;height:44px;border-radius:15px;background:linear-gradient(135deg,#4f46e5,#818cf8);display:grid;place-items:center;font-weight:700;overflow:hidden;flex:none}
+.mav img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.btns{display:flex;gap:8px;margin-top:12px}
+button{font:inherit;border:0;border-radius:13px;padding:11px 14px;color:var(--tx);background:var(--card2);cursor:pointer}
+button.ok{background:var(--ok);color:#04210f;font-weight:600}
+button.no{background:#3b1620;color:#ff8a8a}
+button.pr{background:var(--ac);font-weight:600}
+button.f{flex:1}
+button:active{transform:scale(.97)}
+button:disabled{opacity:.5}
+input,textarea,select{width:100%;font:inherit;color:var(--tx);background:var(--card2);border:1px solid var(--line);border-radius:13px;padding:11px 13px;outline:0}
+input:focus,textarea:focus{border-color:var(--ac)}
+.seg{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;scrollbar-width:none}
+.seg button{white-space:nowrap;padding:8px 13px;border-radius:20px;font-size:14px}
+.seg button.on{background:var(--ac);font-weight:600}
+.sec{font-size:13px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin:18px 2px 8px}
+.badge{display:inline-block;min-width:18px;padding:0 6px;border-radius:9px;background:var(--no);font-size:11px;line-height:18px;text-align:center;margin-left:4px}
+.pill{display:inline-block;padding:2px 9px;border-radius:10px;font-size:12px;background:var(--card2);color:var(--mu)}
+.pill.g{background:#10301c;color:#6ee7a0}.pill.r{background:#3b1620;color:#ff8a8a}.pill.y{background:#3a2c0b;color:#fbbf24}
+.empty{text-align:center;color:var(--mu);padding:36px 0}
+.tabs{position:fixed;left:14px;right:14px;bottom:calc(12px + env(safe-area-inset-bottom));display:flex;background:#15152bf0;backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:26px;padding:6px;z-index:5}
+.tabs button{flex:1;background:none;padding:9px 0;font-size:11px;color:var(--mu);border-radius:20px;position:relative;z-index:1}
+.tabs button span{display:block;font-size:20px}
+.tabs button.on{color:#fff}
+.pillbg{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/4);background:var(--ac);border-radius:20px;transition:transform .3s cubic-bezier(.3,1.2,.5,1)}
+.sheet-bg{position:fixed;inset:0;background:#0009;z-index:10;opacity:0;transition:.2s;pointer-events:none}
+.sheet-bg.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:11;background:var(--card);border-radius:26px 26px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-height:86vh;overflow:auto;transform:translateY(105%);transition:transform .3s cubic-bezier(.3,1,.4,1)}
+.sheet.on{transform:none}
+.toast{position:fixed;left:50%;top:14px;transform:translate(-50%,-80px);background:#25254a;border:1px solid var(--line);padding:10px 16px;border-radius:14px;z-index:30;transition:.3s;max-width:90%}
+.toast.on{transform:translate(-50%,0)}
+.kpi{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kpi div{background:var(--card2);border-radius:14px;padding:11px}
+.kpi b{font-size:20px;display:block}
+.sw{position:relative;width:50px;height:30px;border-radius:15px;background:#33335a;flex:none;transition:.2s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s}
+.sw.on{background:var(--no)}.sw.on::after{left:23px}
+.lbl{font-size:13px;color:var(--mu);margin:12px 0 6px}
+</style>
+</head>
+<body>
+<h1><span class="mav" style="width:36px;height:36px;border-radius:12px">🛠</span> Azika <b>Admin</b></h1>
+<div id="v"></div>
+<nav class="tabs"><div class="pillbg" id="pb"></div>
+<button data-t="q"><span>📥</span>Заявки</button><button data-t="s"><span>👥</span>Продавцы</button><button data-t="p"><span>🎟</span>Промо</button><button data-t="m"><span>⚙️</span>Ещё</button></nav>
+<div class="sheet-bg" id="sbg"></div><div class="sheet" id="sh"></div><div class="toast" id="ts"></div>
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("#0b0b1a"); tg.setBackgroundColor("#0b0b1a"); } catch (e) {} }
+const params = new URLSearchParams(location.search);
+const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
+const API = (params.get("api") || store("api") || "https://92-243-74-80.sslip.io:8443/shop").replace(/\/$/, "");
+if (params.get("api")) store("api", API);
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ltr = n => esc(String(n || "?").replace(/^@/, "").slice(0, 1).toUpperCase());
+async function api(name, body = {}) {
+  const r = await fetch(API + "/api/admin/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, initData: tg ? tg.initData : "" }) });
+  const j = await r.json().catch(() => ({ ok: false, msg: "Ошибка ответа сервера" }));
+  if (!j.ok && j.msg && !body.quiet) toast(j.msg);
+  return j;
+}
+let tt;
+function toast(m) { const t = $("#ts"); t.textContent = m; t.classList.add("on"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("on"), 2600); }
+function haptic(k = "light") { try { tg.HapticFeedback.impactOccurred(k); } catch (e) {} }
+function sheet(html) { $("#sh").innerHTML = html; $("#sbg").classList.add("on"); $("#sh").classList.add("on"); }
+function closeSheet() { $("#sbg").classList.remove("on"); $("#sh").classList.remove("on"); }
+$("#sbg").onclick = closeSheet;
+const av = (src, name) => `<span class="mav">${ltr(name)}${src ? `<img src="${esc(/^https?:/.test(src) ? src : API + src)}" alt="" onerror="this.remove()">` : ""}</span>`;
+const ago = ts => { if (!ts) return ""; const m = Math.max(0, (Date.now() / 1000 - ts) / 60 | 0); return m < 60 ? m + " мин назад" : m < 1440 ? (m / 60 | 0) + " ч назад" : (m / 1440 | 0) + " дн назад"; };
+const V = html => { $("#v").innerHTML = html; };
+
+let tab = "q", counts = {}, sq = "", smode = "a";
+const TABS = ["q", "s", "p", "m"];
+function setTab(t) {
+  tab = t; $("#pb").style.transform = `translateX(${TABS.indexOf(t) * 100}%)`;
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === t));
+  haptic(); ({ q: viewQueue, s: viewSellers, p: viewPromos, m: viewMore })[t]();
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setTab(b.dataset.t));
+function badge() {
+  const b = document.querySelector('.tabs button[data-t="q"]'), o = b.querySelector(".badge"); o && o.remove();
+  if (counts.total) b.insertAdjacentHTML("beforeend", `<i class="badge">${counts.total}</i>`);
+}
+
+/* ---------- Заявки ---------- */
+async function viewQueue() {
+  V(`<div class="empty">Загрузка…</div>`);
+  const q = await api("queue"); if (tab !== "q") return;
+  if (!q.ok) return V(`<div class="empty">${esc(q.msg || "Нет связи")}</div>`);
+  counts = { total: q.sellers.length + q.verify.length + q.offers.length + q.payouts.length }; badge();
+  const act = (k, id) => `<div class="btns"><button class="no f" data-d="${k}:${id}:0">Отклонить</button><button class="ok f" data-d="${k}:${id}:1">Одобрить</button></div>`;
+  let h = "";
+  if (q.sellers.length) h += `<div class="sec">Заявки на продажу · ${q.sellers.length}</div>` + q.sellers.map(x => `<div class="card"><div class="row">${av(x.av, x.name)}<div class="grow"><div class="t">${esc(x.name)}</div><div class="mu">${x.username ? "@" + esc(x.username) + " · " : ""}${ago(x.created)}</div></div></div>${x.about ? `<div style="margin-top:10px">${esc(x.about)}</div>` : ""}${act("seller", x.id)}</div>`).join("");
+  if (q.verify.length) h += `<div class="sec">Заявки на галочку ✓ · ${q.verify.length}</div>` + q.verify.map(x => `<div class="card"><div class="row">${av(x.av, x.name)}<div class="grow"><div class="t">${esc(x.name)}</div><div class="mu">${esc(x.level)} · сделок ${x.deals} · отзывов ${x.reviews}${x.avg ? " · ★" + x.avg : ""}</div></div></div>${act("verify", x.id)}</div>`).join("");
+  if (q.offers.length) h += `<div class="sec">Товары на проверке · ${q.offers.length}</div>` + q.offers.map(x => `<div class="card"><div class="row"><span class="mav">📦<img src="${esc(API + x.img)}" alt="" onerror="this.remove()"></span><div class="grow"><div class="t">${esc(x.title)}</div><div class="mu">${esc(x.game)} · ${x.stars}⭐ · ${esc(x.seller_name)}</div></div></div>${x.descr ? `<div class="mu" style="margin-top:8px">${esc(x.descr)}</div>` : ""}${act("offer", x.id)}</div>`).join("");
+  if (q.payouts.length) h += `<div class="sec">Выплаты · ${q.payouts.length}</div>` + q.payouts.map(x => `<div class="card"><div class="row"><div class="grow"><div class="t">${x.stars}⭐ → ${esc(x.seller_name)}</div><div class="mu">Реквизиты: ${esc(x.details)} · ${ago(x.created)}</div></div></div>${act("payout", x.id)}</div>`).join("");
+  V(h || `<div class="empty">🎉 Всё разобрано<br>Новых заявок нет</div>`);
+  document.querySelectorAll("[data-d]").forEach(b => b.onclick = () => {
+    const [k, id, ok] = b.dataset.d.split(":");
+    if (ok === "1") return doDecide(k, +id, true, "");
+    sheet(`<div class="t" style="font-size:17px">Причина отказа</div><div class="lbl">Покажем её пользователю (можно пропустить)</div><textarea id="rs" rows="3" maxlength="300"></textarea><div class="btns"><button class="f" onclick="closeSheet()">Отмена</button><button class="no f" id="rgo">Отклонить</button></div>`);
+    $("#rgo").onclick = () => { const r = $("#rs").value; closeSheet(); doDecide(k, +id, false, r); };
+  });
+}
+async function doDecide(kind, id, ok, reason) {
+  haptic("medium"); const j = await api("decide", { kind, id, ok, reason }); if (j.ok) toast(j.msg); viewQueue();
+}
+
+/* ---------- Продавцы ---------- */
+let sTimer;
+function viewSellers() {
+  V(`<input id="sq" placeholder="Поиск: имя, @username или ID" value="${esc(sq)}">
+  <div class="seg" style="margin-top:10px">${[["a", "Все"], ["p", "Заявки"], ["v", "На галочку"]].map(([k, n]) => `<button data-m="${k}" class="${smode === k ? "on" : ""}">${n}</button>`).join("")}</div><div id="sl"></div>`);
+  $("#sq").oninput = e => { sq = e.target.value; clearTimeout(sTimer); sTimer = setTimeout(loadSellers, 300); };
+  document.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { smode = b.dataset.m; viewSellers(); });
+  loadSellers();
+}
+const stPill = s => s.status === "banned" ? `<span class="pill r">заблокирован</span>` : s.status === "pending" ? `<span class="pill y">заявка</span>` : "";
+async function loadSellers() {
+  const j = await api("sellers", { page: 0, mode: smode, q: sq }); const box = $("#sl"); if (!box || !j.ok) return;
+  box.innerHTML = j.sellers.length ? j.sellers.map(s => `<div class="card" data-s="${s.id}" style="cursor:pointer"><div class="row">${av(s.av, s.name)}<div class="grow"><div class="t">${esc(s.name)}${s.verified ? " ✅" : ""}</div><div class="mu">${esc(s.name_lvl)} · сделок ${s.deals} · ${s.offers} товаров</div></div>${stPill(s)}${s.verify_req && !s.verified ? `<span class="pill y">✓?</span>` : ""}</div></div>`).join("") : `<div class="empty">Никого не найдено</div>`;
+  box.querySelectorAll("[data-s]").forEach(c => c.onclick = () => openSeller(j.sellers.find(x => x.id == c.dataset.s)));
+}
+function openSeller(s) {
+  const L = s.levels;
+  sheet(`<div class="row">${av(s.av, s.name)}<div class="grow"><div class="t" style="font-size:17px">${esc(s.name)}${s.verified ? " ✅" : ""}</div><div class="mu">ID ${s.id}${s.username ? " · @" + esc(s.username) : ""}</div></div>${stPill(s)}</div>
+  <div class="kpi" style="margin-top:14px"><div><span class="mu">Уровень</span><b>${esc(s.name_lvl)}</b><span class="mu">комиссия ${s.fee}% · лимит ${s.limit}${s.lvl_set ? " · ручной" : ""}</span></div>
+  <div><span class="mu">Сделки / отзывы</span><b>${s.deals} / ${s.cnt}</b><span class="mu">${s.avg ? "★ " + s.avg : "без оценок"}</span></div>
+  <div><span class="mu">Баланс</span><b>${s.balance}⭐</b><span class="mu">заработано ${s.earned}⭐</span></div>
+  <div><span class="mu">Товаров</span><b>${s.offers}</b><span class="mu">в работе заказов ${s.live}</span></div></div>
+  ${s.about ? `<div class="mu" style="margin-top:12px">${esc(s.about)}</div>` : ""}
+  <div class="btns" style="flex-wrap:wrap"><button class="f ${s.verified ? "" : "pr"}" data-a="${s.verified ? "unverify" : "verify"}">${s.verified ? "Снять ✓" : "Выдать ✓"}</button><button class="f" data-a="${s.status === "banned" ? "unban" : "ban"}" style="${s.status === "banned" ? "" : "color:#ff8a8a"}">${s.status === "banned" ? "Разблокировать" : "Заблокировать"}</button></div>
+  <div class="lbl">Уровень</div><div class="btns" style="margin-top:0"><button class="f" data-a="down">−</button><button class="f" data-a="auto">Авто</button><button class="f pr" data-a="up">Повысить</button></div>
+  <div class="lbl">Написать продавцу</div><textarea id="mt" rows="2" placeholder="Текст сообщения"></textarea><div class="btns"><button class="f" data-a="msg">Отправить</button></div>`);
+  document.querySelectorAll("#sh [data-a]").forEach(b => b.onclick = async () => {
+    const a = b.dataset.a, j = await api("seller_act", { id: s.id, act: a, text: a === "msg" ? $("#mt").value : "" });
+    if (j.ok) { haptic("medium"); toast(j.msg); if (j.seller && a !== "msg") openSeller(j.seller); loadSellers(); }
+  });
+}
+
+/* ---------- Промо ---------- */
+async function viewPromos() {
+  V(`<div class="empty">Загрузка…</div>`);
+  const j = await api("promos"); if (tab !== "p") return; if (!j.ok) return V(`<div class="empty">${esc(j.msg || "Нет связи")}</div>`);
+  drawPromos(j.promos);
+}
+function drawPromos(list) {
+  const N = { shop: "🛍 Шоп", vpn: "🔐 VPN" };
+  V(`<button class="pr" style="width:100%;margin-bottom:12px" id="pnew">+ Создать промокод</button>` + (list.length ? list.map(p => `<div class="card"><div class="row"><div class="grow"><div class="t">${esc(p.code)} <span class="pill">−${p.pct}%</span> <span class="pill ${p.paused ? "y" : "g"}">${p.paused ? "пауза" : "активен"}</span></div><div class="mu">${N[p.scope]} · ${p.scope === "vpn" ? (p.left ? "осталось " + p.left : "без лимита") : "использован " + p.used + (p.max ? " из " + p.max : "")}</div></div></div><div class="btns"><button class="f" data-pa="toggle:${p.scope}:${esc(p.code)}">${p.paused ? "▶️ Включить" : "⏸ Пауза"}</button><button class="no" data-pa="delete:${p.scope}:${esc(p.code)}">🗑</button></div></div>`).join("") : `<div class="empty">Промокодов пока нет</div>`));
+  $("#pnew").onclick = newPromo;
+  document.querySelectorAll("[data-pa]").forEach(b => b.onclick = async () => {
+    const [act, scope, code] = b.dataset.pa.split(":");
+    if (act === "delete" && !confirm("Удалить " + code + "?")) return;
+    const j = await api("promo_act", { act, scope, code }); if (j.ok) { toast(j.msg); drawPromos(j.promos); }
+  });
+}
+function newPromo() {
+  let scope = "both";
+  sheet(`<div class="t" style="font-size:17px">Новый промокод</div><div class="lbl">Где действует</div><div class="seg" id="sc">${[["shop", "🛍 Шоп"], ["vpn", "🔐 VPN"], ["both", "Оба"]].map(([k, n]) => `<button data-k="${k}" class="${k === scope ? "on" : ""}">${n}</button>`).join("")}</div>
+  <div class="lbl">Код (латиница, цифры)</div><input id="pc" maxlength="24" autocapitalize="characters" placeholder="AZIKA10">
+  <div class="lbl">Скидка, %</div><input id="pp" type="number" inputmode="numeric" placeholder="10">
+  <div class="row" style="margin-top:12px"><div class="grow"><div class="lbl" style="margin-top:0">Лимит (0 — без)</div><input id="pu" type="number" inputmode="numeric" value="0"></div><div class="grow"><div class="lbl" style="margin-top:0">Дней (0 — бессрочно)</div><input id="pd" type="number" inputmode="numeric" value="0"></div></div>
+  <div class="btns"><button class="pr f" id="pgo">Создать</button></div>`);
+  document.querySelectorAll("#sc button").forEach(b => b.onclick = () => { scope = b.dataset.k; document.querySelectorAll("#sc button").forEach(x => x.classList.toggle("on", x === b)); });
+  $("#pgo").onclick = async () => {
+    const j = await api("promo_new", { scope, code: $("#pc").value, pct: +$("#pp").value, uses: +$("#pu").value, days: +$("#pd").value });
+    if (j.ok) { closeSheet(); toast(j.msg); drawPromos(j.promos); }
+  };
+}
+
+/* ---------- Ещё ---------- */
+async function viewMore() {
+  V(`<div class="empty">Загрузка…</div>`);
+  const j = await api("overview"); if (tab !== "m") return; if (!j.ok) return V(`<div class="empty">${esc(j.msg || "Нет связи")}</div>`);
+  counts = { total: j.counts.total || 0 }; badge();
+  const s = j.stats.shop, v = j.stats.vpn, p = j.pause;
+  const sw = (k, n, st) => st === null ? "" : `<div class="row" style="padding:8px 0"><div class="grow"><div class="t">${n}</div><div class="mu">${st ? "продажи приостановлены" : "работает"}</div></div><div class="sw ${st ? "on" : ""}" data-sw="${k}:${st ? 0 : 1}"></div></div>`;
+  V(`<div class="sec">Приостановить продажи</div><div class="card">${sw("shop", "🛍 Azika Shop", p.shop)}${sw("vpn", "🔐 Azika VPN", p.vpn)}
+  <div class="lbl">Сообщение покупателям</div><textarea id="pm" rows="2" maxlength="200">${esc(p.msg)}</textarea><div class="btns"><button class="f" id="pmb">Сохранить текст</button><button class="no f" data-sw="all:1">Всё стоп</button><button class="ok f" data-sw="all:0">Всё вкл</button></div></div>
+  ${s ? `<div class="sec">Шоп</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${s.users}</b></div><div><span class="mu">Сегодня</span><b>${s.today}</b><span class="mu">${s.today_stars}⭐</span></div><div><span class="mu">Всего оплат</span><b>${s.paid}</b><span class="mu">${s.paid_stars}⭐</span></div><div><span class="mu">Ждут выдачи</span><b>${s.wait}</b></div><div><span class="mu">Споры</span><b>${s.disputes}</b></div><div><span class="mu">Продавцов</span><b>${s.sellers}</b><span class="mu">блок ${s.sellers_banned}</span></div></div>` : ""}
+  ${v ? `<div class="sec">VPN</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${v.users}</b></div><div><span class="mu">Активных</span><b>${v.active}</b></div><div><span class="mu">Оплат</span><b>${v.payments}</b></div><div><span class="mu">Сегодня</span><b>${v.payments_today}</b></div></div>` : ""}`);
+  document.querySelectorAll("[data-sw]").forEach(b => b.onclick = async () => {
+    const [which, on] = b.dataset.sw.split(":"), r = await api("pause", { which, on: on === "1" }); if (r.ok) { haptic("medium"); toast("Сохранено"); viewMore(); }
+  });
+  $("#pmb").onclick = async () => { const r = await api("pause", { which: "all", text: $("#pm").value }); if (r.ok) toast("Текст сохранён"); };
+}
+
+setTab("q");
+api("overview", { quiet: true }).then(j => { if (j.ok) { counts = { total: j.counts.total || 0 }; badge(); } });
+</script>
+</body>
+</html>
