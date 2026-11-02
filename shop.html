@@ -318,6 +318,7 @@ textarea.f{resize:none;height:58px}
 .cli .tx{flex:1;min-width:0;font-weight:800;font-size:14px}.cli .tx small{display:block;color:var(--muted);font-weight:600;font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cli i{font-style:normal;background:var(--pink);color:#fff;border-radius:99px;padding:2px 9px;font-size:11px;font-weight:800}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+.onl{color:#2ee6a6;font-weight:700}.onl::first-letter{animation:onl 1.6s infinite}@keyframes onl{50%{opacity:.35}}
 </style>
 </head>
 <body>
@@ -739,6 +740,7 @@ async function showOrders() {
       const n = step(o.status), bad = o.status === "refunded";
       return `<div class="order up" style="--i:${i}"><div class="h"><span>#${o.id} · ${esc(o.game)}</span><span class="badge ${esc(o.status)}">${esc(o.status_text)}</span></div>
       <div class="m">${esc(o.label)} · ${o.stars} ⭐<br>Игрок: ${esc(o.player)} · ${esc(o.created)}${o.cashback ? `<br><span style="color:var(--mint)">💸 Кэшбэк +${o.cashback} баллов</span>` : ""}</div>
+      ${o.seller_review ? `<div class="tmr" style="background:rgba(255,200,61,.14);color:var(--gold,#ffc83d)">🔍 Продавец на проверке у администрации. Твой заказ защищён: деньги у магазина, пока ты не подтвердишь получение.</div>` : ""}
       ${o.status === "new" ? `<div class="tmr">⏱ Ожидает оплаты — осталось ${Math.max(1, Math.ceil(o.expires_in / 60))} мин</div>` : ""}
       ${bad || o.status === "new" ? "" : `${o.escrow ? `<div class="steps"><i class="ok">✓</i><s class="on"></s><i class="${n >= 3 ? "ok" : "on"}">${n >= 3 ? "✓" : "2"}</i><s class="${n >= 3 ? "on" : ""}"></s><i class="${n >= 4 ? "ok" : n === 3 ? "on" : ""}">${n >= 4 ? "✓" : "3"}</i></div>
       <div class="steps-l"><span>Оплачен</span><span>Передан</span><span>Подтверждён</span></div>
@@ -783,6 +785,7 @@ function openDispute(order) {
 function fmtLeft(sec) { const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600); return d ? `${d} дн. ${h} ч` : h ? `${h} ч` : "менее часа"; }
 
 /* ---------- Чат по заказу ---------- */
+const seenHtml = (ts, on) => { if (on) return '<span class="onl">● онлайн</span>'; if (!ts) return ""; const m = Math.max(1, (Date.now() / 1000 - ts) / 60 | 0); return "был(а) " + (m < 60 ? m + " мин" : m < 1440 ? (m / 60 | 0) + " ч" : (m / 1440 | 0) + " дн") + " назад"; };
 const ltr = n => esc(String(n || "?").trim().slice(0, 1).toUpperCase());
 const avEl = (src, name, cls = "", fb = "") => `<span class="mav ${cls}">${ltr(name)}${src ? `<img src="${esc(/^https?:/.test(src) ? src : API + src)}" ${fb ? `data-f="${esc(fb)}"` : ""} alt="" onerror="if(this.dataset.f){this.src=this.dataset.f;this.removeAttribute('data-f')}else this.remove()">` : ""}</span>`;
 const CHAT_INTRO = `<div class="cintro" id="cintro"><b>💬 Как работает чат</b><ul>
@@ -805,6 +808,7 @@ async function openChat(order, peer, label) {
       const r = await api("/api/chat/messages", { order }); if (!r.ok) return;
       if ($("#chT") && r.peer) { $("#chT").textContent = r.peer; peerName = r.peer; }
       if (!hdr && $("#chAv")) { $("#chAv").innerHTML = avEl(r.peer_av, r.peer, "big"); hdr = true; }
+      if ($("#chS")) { const sn = seenHtml(r.peer_seen, r.peer_online); if (sn) $("#chS").innerHTML = sn; }
       const sig = r.messages.map(m => m.id + (m.read ? "r" : "")).join(",");
       if (sig === last || !$("#chBox")) return; last = sig;
       const box = $("#chBox"), atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 60 || !box.dataset.ok;

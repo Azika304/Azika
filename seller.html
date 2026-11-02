@@ -135,6 +135,7 @@ input.f:focus,textarea.f:focus{border-color:var(--a1)}textarea.f{resize:none;hei
 .badge.paid{animation:blink 1.8s ease-in-out infinite}
 @keyframes blink{50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+.onl{color:#2ee6a6;font-weight:700}.onl::first-letter{animation:onl 1.6s infinite}@keyframes onl{50%{opacity:.35}}
 </style>
 </head>
 <body>
@@ -376,6 +377,7 @@ async function showChats() {
     document.querySelectorAll(".cli").forEach(el => el.onclick = () => openChat(+el.dataset.o, "Покупатель", el.dataset.l));
   } catch (e) { view('<div class="err">Нет связи</div>'); }
 }
+const seenHtml = (ts, on) => { if (on) return '<span class="onl">● онлайн</span>'; if (!ts) return ""; const m = Math.max(1, (Date.now() / 1000 - ts) / 60 | 0); return "был(а) " + (m < 60 ? m + " мин" : m < 1440 ? (m / 60 | 0) + " ч" : (m / 1440 | 0) + " дн") + " назад"; };
 const ltr = n => esc(String(n || "?").trim().slice(0, 1).toUpperCase());
 const avEl = (src, name, cls = "", fb = "") => `<span class="mav ${cls}">${ltr(name)}${src ? `<img src="${esc(/^https?:/.test(src) ? src : API + src)}" ${fb ? `data-f="${esc(fb)}"` : ""} alt="" onerror="if(this.dataset.f){this.src=this.dataset.f;this.removeAttribute('data-f')}else this.remove()">` : ""}</span>`;
 const CHAT_INTRO = `<div class="cintro" id="cintro"><b>💬 Как работает чат</b><ul>
@@ -386,7 +388,7 @@ const CHAT_INTRO = `<div class="cintro" id="cintro"><b>💬 Как работа�
   <button id="cintroOk">Понятно</button></div>`;
 async function openChat(order, peer, label) {
   const me = tg && tg.initDataUnsafe && tg.initDataUnsafe.user || {};
-  sheetOpen(`<div class="sh-h"><div class="chh"><span id="chAv">${avEl("", peer, "big")}</span><div><h3 id="chT">${esc(peer)}</h3><p>${esc(label || "")} · #${order}</p></div></div></div>
+  sheetOpen(`<div class="sh-h"><div class="chh"><span id="chAv">${avEl("", peer, "big")}</span><div><h3 id="chT">${esc(peer)}</h3><p id="chS">${esc(label || "")} · #${order}</p></div></div></div>
     ${store("chat_intro1") ? "" : CHAT_INTRO}
     <div class="chat" id="chBox"><div class="sk" style="height:60px"></div></div>
     <div class="cin"><input class="f" id="chIn" maxlength="500" placeholder="Сообщение…" autocomplete="off"><button id="chSend" aria-label="Отправить">➤</button></div>`);
@@ -396,6 +398,7 @@ async function openChat(order, peer, label) {
     const r = await api("/api/chat/messages", { order }); if (!r.ok || !$("#chBox")) return;
     if (r.peer) { $("#chT").textContent = r.peer; peerName = r.peer; }
     if (!hdr && $("#chAv")) { $("#chAv").innerHTML = avEl(r.peer_av, r.peer, "big"); hdr = true; }
+    if ($("#chS")) { const sn = seenHtml(r.peer_seen, r.peer_online); if (sn) $("#chS").innerHTML = sn; }
     const sig = r.messages.map(m => m.id + (m.read ? "r" : "")).join(","); if (sig === last) return; last = sig;
     const box = $("#chBox"), end = box.scrollHeight - box.scrollTop - box.clientHeight < 60 || !box.dataset.ok;
     box.innerHTML = r.messages.length ? r.messages.map(m => `<div class="mrow ${m.mine ? "me" : "he"}">${avEl(m.av, m.mine ? (me.first_name || S.me && S.me.name) : peerName, "", m.mine ? (me.photo_url || "") : "")}<div class="msg ${m.mine ? "me" : "he"}">${esc(m.text)}<small>${esc(m.time)}${m.mine ? `<span class="tk ${m.read ? "r" : ""}">${m.read ? "✓✓" : "✓"}</span>` : ""}</small></div></div>`).join("") : '<div class="empty" style="padding:30px 10px">Сообщений пока нет</div>';
@@ -414,24 +417,44 @@ async function showMoney() {
   const nm = me.name || u.first_name || "Продавец", L = sellerLevel(me);
   view(`<div class="me"><div class="ava" id="ava">${esc(nm.slice(0, 1).toUpperCase())}${me.av ? `<img src="${esc(API + me.av)}" ${u.photo_url ? `data-f="${esc(u.photo_url)}"` : ""} alt="" onerror="if(this.dataset.f){this.src=this.dataset.f;this.removeAttribute('data-f')}else this.remove()">` : (u.photo_url ? `<img src="${esc(u.photo_url)}" alt="">` : "")}<span class="avedit">✎</span></div>
       <div><h3>${esc(nm)} ${me.verified ? '<span class="ck">✓</span>' : ""}</h3><p>${u.username ? "@" + esc(u.username) + " · " : ""}ID ${me.id}</p><div class="lvrow"><button class="lvl ${store("lvl_seen2") ? "" : "pulse"}" id="lvl">⚡ ${esc(L.cur.name)} <small>· ${L.cur.fee}%</small> ›</button>${store("lvl_seen2") ? "" : '<span class="tapme">👈 нажми</span>'}</div></div></div>
+    ${me.review ? '<div class="note" style="margin:0 0 12px;background:rgba(255,200,61,.14);color:var(--gold);font-size:13px">🔍 <b>Твой аккаунт на проверке.</b> Товары временно скрыты из магазина, новые покупки закрыты. Уже оплаченные заказы выполняй как обычно. Напиши администрации в «Сообщения».</div>' : ""}
     <div class="card"><h4>Баланс</h4><div class="kv"><div class="g"><b>${me.balance}</b><span>доступно ⭐</span></div><div class="w"><b>${me.escrow || 0}</b><span>в сделках ⭐</span></div><div><b>${me.earned}</b><span>заработано ⭐</span></div></div>
     <p>«В сделках» — деньги покупателей, которые держит магазин до подтверждения получения.${me.pending_payout ? `<br>На выводе: <b>${me.pending_payout} ⭐</b> (ждёт админа)` : ""}</p>
     <button class="btn" id="po">💸 Вывести</button></div>
     <div class="card"><h4>Мой профиль</h4><div class="kv"><div><b>${me.deals}</b><span>сделок</span></div><div><b>${me.reviews ? "★ " + me.avg : "—"}</b><span>рейтинг</span></div><div><b>${me.reviews}</b><span>отзывов</span></div></div>
       ${verifyBlock(me)}
       <button class="btn ghost" id="rv">⭐ Мои отзывы</button></div>
+    <button class="btn ghost" id="adm" style="margin-bottom:10px">📨 Сообщения от администрации${me.admin_unread ? ` · <b style="color:var(--bad)">${me.admin_unread} нов.</b>` : ""}</button>
     <button class="btn ghost" id="sup" style="margin-bottom:12px">🆘 Поддержка</button>
     <div class="note" style="text-align:center;opacity:.6;margin-bottom:8px">Azika Seller · версия 3</div>
     <div class="note">Твоя комиссия магазина ${me.fee}% (уровень «${esc(me.level.name)}», чем выше уровень — тем меньше). Минимальный вывод ${me.payout_min} ⭐. Выплата вручную через администратора.</div>`);
   $("#ava").onclick = () => { haptic(); openAvatar(me, nm, showMoney); };
   $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(me); };
   $("#po").onclick = () => payoutForm(me);
+  $("#adm").onclick = () => { haptic(); openAdminChat(); };
   $("#sup").onclick = () => { const u = "https://t.me/" + (S.support || "@azikashop_support_bot").replace(/^@/, "") + "?start=seller"; tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); };
   $("#rv").onclick = openReviews;
   if ($("#vreq")) $("#vreq").onclick = async () => { $("#vreq").disabled = true;
     try { const r = await api("/api/seller/verify_req", {}); toast(r.msg || (r.ok ? "Заявка отправлена" : "Не получилось"), r.ok);
       if (r.ok || r.verify) { me.verify = r.verify || { state: "pending" }; S.me = me; showMoney(); } else $("#vreq").disabled = false; }
     catch (e) { toast("Нет связи"); $("#vreq").disabled = false; } };
+}
+async function openAdminChat() {
+  sheetOpen(`<div class="sh-h"><div><h3>📨 Администрация</h3><p id="admS">Здесь админ может написать тебе первым — ответ придёт ему в Telegram</p></div></div>
+    <div class="chat" id="chBox"><div class="sk" style="height:60px"></div></div>
+    <div class="cin"><input class="f" id="chIn" maxlength="500" placeholder="Сообщение…" autocomplete="off"><button id="chSend" aria-label="Отправить">➤</button></div>`);
+  let last = "";
+  const load = async () => { try {
+    const r = await api("/api/seller/admin_chat", {}); if (!r.ok || !$("#chBox")) return;
+    if ($("#admS")) { const sn = seenHtml(r.admin_seen, r.admin_online); if (sn) $("#admS").innerHTML = sn; }
+    const sig = r.msgs.map(m => m.id + (m.read ? "r" : "")).join(","); if (sig === last) return; last = sig;
+    const box = $("#chBox"), end = box.scrollHeight - box.scrollTop - box.clientHeight < 60 || !box.dataset.ok;
+    box.innerHTML = r.msgs.length ? r.msgs.map(m => `<div class="mrow ${m.mine ? "me" : "he"}">${avEl("", m.mine ? (S.me && S.me.name) : "A", "")}<div class="msg ${m.mine ? "me" : "he"}">${esc(m.text)}<small>${esc(m.t)}${m.mine ? `<span class="tk ${m.read ? "r" : ""}">${m.read ? "✓✓" : "✓"}</span>` : ""}</small></div></div>`).join("") : '<div class="empty" style="padding:30px 10px">Сообщений пока нет</div>';
+    box.dataset.ok = 1; if (end) box.scrollTop = box.scrollHeight; } catch (e) {} };
+  await load(); S.chatT = setInterval(load, 5000);
+  const send = async () => { const t = $("#chIn").value.trim(); if (!t) return; $("#chIn").value = "";
+    try { const r = await api("/api/seller/admin_send", { text: t }); if (!r.ok) { toast(r.msg || "Не отправилось"); $("#chIn").value = t; } else { haptic(); last = ""; load(); } } catch (e) { toast("Нет связи"); $("#chIn").value = t; } };
+  $("#chSend").onclick = send; $("#chIn").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
 }
 function verifyBlock(me) {
   const v = me.verify || { state: me.verified ? "verified" : "can" };

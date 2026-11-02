@@ -256,6 +256,10 @@ def init_db():
         _addcol(c, "sellers", "verified", "INTEGER DEFAULT 0")
         _addcol(c, "sellers", "lvl", "INTEGER DEFAULT 1")
         _addcol(c, "sellers", "verify_asked", "INTEGER DEFAULT 0")
+        _addcol(c, "sellers", "review", "INTEGER DEFAULT 0")   # админ вызвал продавца на проверку: товары скрыты
+        c.execute("CREATE TABLE IF NOT EXISTS admin_msgs(id INTEGER PRIMARY KEY AUTOINCREMENT, seller_id INTEGER, from_admin INTEGER, text TEXT, created INTEGER, read INTEGER DEFAULT 0)")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_adm_msg ON admin_msgs(seller_id)")
+        c.execute("CREATE TABLE IF NOT EXISTS seen(user_id INTEGER PRIMARY KEY, ts INTEGER)")   # когда человек последний раз был в приложении
         c.commit()
 
 
@@ -428,7 +432,7 @@ def catalog() -> list:
 
     with closing(db()) as c:
         rows = c.execute(f"SELECT {OFFER_COLS} FROM offers o WHERE status='active' AND seller_id IN "
-                         "(SELECT user_id FROM sellers WHERE status='approved') ORDER BY (boost_until>?) DESC, boost_at DESC, id DESC",
+                         "(SELECT user_id FROM sellers WHERE status='approved' AND COALESCE(review,0)=0) ORDER BY (boost_until>?) DESC, boost_at DESC, id DESC",
                          (int(time.time()),)).fetchall()
         offers_all = [dict(zip(OFFER_COLS.split(","), r)) for r in rows]
         deals = dict(c.execute("SELECT seller_id,COUNT(*) FROM orders WHERE status='done' AND seller_id>0 GROUP BY seller_id").fetchall())
@@ -459,11 +463,43 @@ def catalog() -> list:
     return out
 
 
+ONLINE_SEC = 75
+_seen_cache: dict = {}
+
+
+def touch_seen(uid: int):
+    now = int(time.time())
+    if now - _seen_cache.get(uid, 0) < 20:
+        return
+    _seen_cache[uid] = now
+    try:
+        with closing(db()) as c:
+            c.execute("INSERT INTO seen(user_id,ts) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET ts=excluded.ts", (uid, now))
+            c.commit()
+    except Exception as e:
+        logging.debug("seen: %s", e)
+
+
+def seen_of(uid: int) -> dict:
+    with closing(db()) as c:
+        r = c.execute("SELECT ts FROM seen WHERE user_id=?", (uid,)).fetchone()
+    ts = int(r[0]) if r else 0
+    return {"seen": ts, "online": bool(ts) and time.time() - ts < ONLINE_SEC}
+
+
+def on_review(uid: int) -> bool:
+    if not uid:
+        return False
+    with closing(db()) as c:
+        r = c.execute("SELECT COALESCE(review,0) FROM sellers WHERE user_id=?", (uid,)).fetchone()
+    return bool(r and r[0])
+
+
 def pack_available(pack_id: str) -> bool:
     if is_offer_id(pack_id):
         o = offer_get(pack_id)
         sl = seller_row(o["seller_id"]) if o else None
-        return bool(o and sl and o["status"] == "active" and sl["status"] == "approved"
+        return bool(o and sl and o["status"] == "active" and sl["status"] == "approved" and not on_review(o["seller_id"])
                     and o["game"] in GAME_BY_ID and o["game"] not in hidden_keys())
     if pack_id not in PACKS:
         return False
@@ -1806,6 +1842,7 @@ async def _auth(request):
         return None, {}
     user = verify_init_data(str(data.get("initData", "")))
     if user:
+        touch_seen(user["id"])
         ref = parse_ref(user.get("_sp", ""))
         if ensure_user(user["id"], user.get("first_name", ""), user.get("username", ""), ref) and get_ref_by(user["id"]):
             asyncio.create_task(welcome_referrer(get_ref_by(user["id"]), user.get("first_name", "")))
@@ -1897,6 +1934,7 @@ async def api_orders(request):
             "expires_in": max(0, int(o["created"] + ORDER_TTL_MIN * 60 - now)) if o["status"] == "new" else 0,
             "can_review": o["status"] == "done" and o["id"] not in reviewed, "reviewed": o["id"] in reviewed,
             "chat": bool(o["seller_id"]) and o["status"] in CHAT_OPEN, "unread": unread.get(o["id"], 0),
+            "seller_review": on_review(o["seller_id"]),
             "escrow": bool(o["seller_id"]), "can_confirm": o["status"] == "delivered" and bool(o["seller_id"]),
             "can_dispute": o["status"] in ("paid", "delivered") and bool(o["seller_id"]),
             "auto_in": max(0, int(o["delivered_at"] + AUTO_CONFIRM_DAYS * 86400 - now)) if o["status"] == "delivered" else 0}
@@ -2435,6 +2473,47 @@ async def api_admin_proxy(request):
         return web.json_response({"ok": False, "msg": "Админ-бот не запущен на сервере"}, status=502)
 
 
+def admin_unread(uid: int) -> int:
+    with closing(db()) as c:
+        return c.execute("SELECT COUNT(*) FROM admin_msgs WHERE seller_id=? AND from_admin=1 AND read=0", (uid,)).fetchone()[0]
+
+
+async def api_seller_admin_chat(request):
+    """Переписка продавца с администрацией (админ пишет первым через @azikaadmin_bot / мини-приложение)."""
+    user, _ = await _auth(request)
+    if not user:
+        return _deny()
+    uid = user["id"]
+    if not seller_row(uid):
+        return web.json_response({"ok": False, "msg": "Только для продавцов"})
+    with closing(db()) as c:
+        rows = c.execute("SELECT id,from_admin,text,created,read FROM admin_msgs WHERE seller_id=? ORDER BY id DESC LIMIT 80", (uid,)).fetchall()[::-1]
+        c.execute("UPDATE admin_msgs SET read=1 WHERE seller_id=? AND from_admin=1 AND read=0", (uid,))
+        c.commit()
+    return web.json_response({"ok": True, "review": on_review(uid), **{"admin_" + k: v for k, v in seen_of(ADMIN_ID).items()},
+                              "msgs": [{"id": r[0], "mine": not r[1], "text": r[2], "t": fmt_time(r[3]), "read": bool(r[4])} for r in rows]})
+
+
+async def api_seller_admin_send(request):
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    uid = user["id"]
+    if not seller_row(uid):
+        return web.json_response({"ok": False, "msg": "Только для продавцов"})
+    text = str(data.get("text", "")).strip()[:1000]
+    if not text:
+        return web.json_response({"ok": False, "msg": "Напиши сообщение"})
+    with closing(db()) as c:
+        c.execute("INSERT INTO admin_msgs(seller_id,from_admin,text,created) VALUES(?,0,?,?)", (uid, text, int(time.time())))
+        c.commit()
+    try:
+        await bot.send_message(ADMIN_ID, f"💬 <b>{escape(seller_name(uid) or str(uid))}</b> (продавец):\n{escape(text)}\n\nОтветь в @azikaadmin_bot → Продавцы → Чаты.")
+    except Exception as e:
+        logging.info("admin_send notify: %s", e)
+    return web.json_response({"ok": True})
+
+
 def seller_payload(uid: int) -> dict:
     sl = seller_row(uid)
     if not sl:
@@ -2451,7 +2530,7 @@ def seller_payload(uid: int) -> dict:
             "deals": deals, "avg": avg, "reviews": cnt, "fee": seller_fee(uid), "level": seller_level(uid), "offers_used": sum(1 for o in rows if o[6] in ("pending", "active", "hidden")), "payout_min": PAYOUT_MIN,
             "seller_bot": SELLER_BOT_USERNAME, "ad_price": AD_PRICE, "verified": bool(sl.get("verified")), "verify": verify_state(uid, sl),
             "escrow": escrow, "auto_days": AUTO_CONFIRM_DAYS, "name": seller_name(uid),
-            "unread": sum(c["unread"] for c in my_chats(uid)),
+            "unread": sum(c["unread"] for c in my_chats(uid)), "review": on_review(uid), "admin_unread": admin_unread(uid),
             "offers": [{"id": f"o{o[0]}", "game": o[2], "title": o[3], "desc": o[4], "stars": o[5], "status": o[6], "sold": o[8],
                         "ad": (o[9] or 0) > time.time(), "rank": ad_rank(o[0], o[2])} for o in rows]}
 
@@ -2530,6 +2609,7 @@ async def api_chat_messages(request):
     peer = (seller_name(o["seller_id"]) or "Продавец") if user["id"] == o["user_id"] else ((user_info(o["user_id"]).split(" @")[0]) or "Покупатель")
     return web.json_response({"ok": True, "peer": peer, "label": o["label"], "open": o["status"] in CHAT_OPEN,
                               "peer_av": av_url(o["seller_id"] if user["id"] == o["user_id"] else o["user_id"]), "me_av": av_url(user["id"]),
+                              **{"peer_" + k: v for k, v in seen_of(o["seller_id"] if user["id"] == o["user_id"] else o["user_id"]).items()},
                               "messages": chat_messages(oid, user["id"])})
 
 
@@ -2712,6 +2792,8 @@ async def start_api():
     app.router.add_route("*", "/api/review", api_review)
     app.router.add_route("*", "/api/seller/me", api_seller_me)
     app.router.add_route("*", "/api/seller/verify_req", api_seller_verify_req)
+    app.router.add_route("*", "/api/seller/admin_chat", api_seller_admin_chat)
+    app.router.add_route("*", "/api/seller/admin_send", api_seller_admin_send)
     app.router.add_route("*", "/api/admin/{tail}", api_admin_proxy)
     app.router.add_route("*", "/api/seller/apply", api_seller_apply)
     app.router.add_route("*", "/api/seller/offer", api_seller_offer)

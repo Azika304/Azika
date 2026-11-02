@@ -46,15 +46,37 @@ input:focus,textarea:focus{border-color:var(--ac)}
 .sheet-bg.on{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:11;background:var(--card);border-radius:26px 26px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-height:86vh;overflow:auto;transform:translateY(105%);transition:transform .3s cubic-bezier(.3,1,.4,1)}
 .sheet.on{transform:none}
-.toast{position:fixed;left:50%;top:14px;transform:translate(-50%,-80px);background:#25254a;border:1px solid var(--line);padding:10px 16px;border-radius:14px;z-index:30;transition:.3s;max-width:90%}
-.toast.on{transform:translate(-50%,0)}
+.toast{opacity:0;position:fixed;left:50%;top:14px;transform:translate(-50%,-150%);background:#25254a;border:1px solid var(--line);padding:10px 16px;border-radius:14px;z-index:30;transition:.3s;max-width:90%}
+.toast.on{opacity:1;transform:translate(-50%,0)}
 .kpi{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .kpi div{background:var(--card2);border-radius:14px;padding:11px}
 .kpi b{font-size:20px;display:block}
-.sw{position:relative;width:50px;height:30px;border-radius:15px;background:#33335a;flex:none;transition:.2s}
-.sw::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s}
-.sw.on{background:var(--no)}.sw.on::after{left:23px}
+.sw{position:relative;width:54px;height:32px;border-radius:16px;background:#16a34a;flex:none;transition:background .3s;cursor:pointer;box-shadow:inset 0 0 0 1px #ffffff1f}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;transition:transform .35s cubic-bezier(.3,1.5,.5,1);box-shadow:0 2px 6px #0006}
+.sw.on{background:var(--no)}.sw.on::after{transform:translateX(22px)}
+.sw:active::after{width:32px}.sw.on:active::after{transform:translateX(16px)}
+.swl{font-size:12px;font-weight:600;color:#6ee7a0;transition:color .3s}.swl.on{color:#ff8a8a}
+@keyframes rise{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes slideL{from{opacity:0;transform:translateX(34px)}to{opacity:1;transform:none}}
+@keyframes slideR{from{opacity:0;transform:translateX(-34px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+#v.l{animation:slideL .32s cubic-bezier(.2,.8,.3,1)}#v.r{animation:slideR .32s cubic-bezier(.2,.8,.3,1)}
+#v .card,#v .seg,#v>button,#v>input,.sec{animation:rise .45s cubic-bezier(.2,.8,.3,1) both}
+#v>*:nth-child(2){animation-delay:.04s}#v>*:nth-child(3){animation-delay:.08s}#v>*:nth-child(4){animation-delay:.12s}#v>*:nth-child(5){animation-delay:.16s}#v>*:nth-child(6){animation-delay:.2s}#v>*:nth-child(n+7){animation-delay:.24s}
+h1 .mav{animation:pop .6s cubic-bezier(.3,1.4,.5,1) both}
+button{transition:transform .12s,background .2s,opacity .2s}
+.badge{animation:pop .4s both}
+.card{transition:transform .15s,border-color .2s}.card[data-s]:active,.card[data-c]:active{transform:scale(.98);border-color:var(--ac)}
+.sheet.on > *{animation:rise .4s both}.sheet.on > *:nth-child(2){animation-delay:.05s}.sheet.on > *:nth-child(3){animation-delay:.1s}.sheet.on > *:nth-child(n+4){animation-delay:.15s}
+.bub{max-width:82%;padding:9px 12px;border-radius:16px;margin:6px 0;animation:pop .3s both;word-wrap:break-word;white-space:pre-wrap}
+.bub.me{margin-left:auto;background:var(--ac);border-bottom-right-radius:5px}.bub.he{background:var(--card2);border-bottom-left-radius:5px}
+.bub small{display:block;font-size:10px;opacity:.6;margin-top:3px}
+#msgs{height:42vh;overflow-y:auto;padding:4px 2px;display:flex;flex-direction:column}
+.rv{background:#3a2c0b;border:1px solid #6b4e12;color:#fbbf24;border-radius:14px;padding:10px 12px;margin-top:12px;font-size:13px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .lbl{font-size:13px;color:var(--mu);margin:12px 0 6px}
+.onl{color:#2ee6a6;font-weight:700}.onl::first-letter{animation:onl 1.6s infinite}@keyframes onl{50%{opacity:.35}}
 </style>
 </head>
 <body>
@@ -72,6 +94,7 @@ const API = (params.get("api") || store("api") || "https://92-243-74-80.sslip.io
 if (params.get("api")) store("api", API);
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const seenHtml = (ts, on) => { if (on) return '<span class="onl">● онлайн</span>'; if (!ts) return ""; const m = Math.max(1, (Date.now() / 1000 - ts) / 60 | 0); return "был(а) " + (m < 60 ? m + " мин" : m < 1440 ? (m / 60 | 0) + " ч" : (m / 1440 | 0) + " дн") + " назад"; };
 const ltr = n => esc(String(n || "?").replace(/^@/, "").slice(0, 1).toUpperCase());
 async function api(name, body = {}) {
   const r = await fetch(API + "/api/admin/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, initData: tg ? tg.initData : "" }) });
@@ -83,8 +106,7 @@ let tt;
 function toast(m) { const t = $("#ts"); t.textContent = m; t.classList.add("on"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("on"), 2600); }
 function haptic(k = "light") { try { tg.HapticFeedback.impactOccurred(k); } catch (e) {} }
 function sheet(html) { $("#sh").innerHTML = html; $("#sbg").classList.add("on"); $("#sh").classList.add("on"); }
-function closeSheet() { $("#sbg").classList.remove("on"); $("#sh").classList.remove("on"); }
-$("#sbg").onclick = closeSheet;
+let closeSheet = function closeSheet0() { $("#sbg").classList.remove("on"); $("#sh").classList.remove("on"); };
 const av = (src, name) => `<span class="mav">${ltr(name)}${src ? `<img src="${esc(/^https?:/.test(src) ? src : API + src)}" alt="" onerror="this.remove()">` : ""}</span>`;
 const ago = ts => { if (!ts) return ""; const m = Math.max(0, (Date.now() / 1000 - ts) / 60 | 0); return m < 60 ? m + " мин назад" : m < 1440 ? (m / 60 | 0) + " ч назад" : (m / 1440 | 0) + " дн назад"; };
 const V = html => { $("#v").innerHTML = html; };
@@ -92,14 +114,17 @@ const V = html => { $("#v").innerHTML = html; };
 let tab = "q", counts = {}, sq = "", smode = "a";
 const TABS = ["q", "s", "p", "m"];
 function setTab(t) {
-  tab = t; $("#pb").style.transform = `translateX(${TABS.indexOf(t) * 100}%)`;
+  const dir = TABS.indexOf(t) >= TABS.indexOf(tab) ? "l" : "r"; tab = t;
+  const v = $("#v"); v.className = ""; void v.offsetWidth; v.className = dir; $("#pb").style.transform = `translateX(${TABS.indexOf(t) * 100}%)`;
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === t));
   haptic(); ({ q: viewQueue, s: viewSellers, p: viewPromos, m: viewMore })[t]();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setTab(b.dataset.t));
 function badge() {
-  const b = document.querySelector('.tabs button[data-t="q"]'), o = b.querySelector(".badge"); o && o.remove();
-  if (counts.total) b.insertAdjacentHTML("beforeend", `<i class="badge">${counts.total}</i>`);
+  [["q", counts.total], ["s", counts.chat]].forEach(([t, n]) => {
+    const b = document.querySelector(`.tabs button[data-t="${t}"]`), o = b.querySelector(".badge"); o && o.remove();
+    if (n) b.insertAdjacentHTML("beforeend", `<i class="badge">${n}</i>`);
+  });
 }
 
 /* ---------- Заявки ---------- */
@@ -107,7 +132,7 @@ async function viewQueue() {
   V(`<div class="empty">Загрузка…</div>`);
   const q = await api("queue"); if (tab !== "q") return;
   if (!q.ok) return V(`<div class="empty">${esc(q.msg || "Нет связи")}</div>`);
-  counts = { total: q.sellers.length + q.verify.length + q.offers.length + q.payouts.length }; badge();
+  counts.total = q.sellers.length + q.verify.length + q.offers.length + q.payouts.length; badge();
   const act = (k, id) => `<div class="btns"><button class="no f" data-d="${k}:${id}:0">Отклонить</button><button class="ok f" data-d="${k}:${id}:1">Одобрить</button></div>`;
   let h = "";
   if (q.sellers.length) h += `<div class="sec">Заявки на продажу · ${q.sellers.length}</div>` + q.sellers.map(x => `<div class="card"><div class="row">${av(x.av, x.name)}<div class="grow"><div class="t">${esc(x.name)}</div><div class="mu">${x.username ? "@" + esc(x.username) + " · " : ""}${ago(x.created)}</div></div></div>${x.about ? `<div style="margin-top:10px">${esc(x.about)}</div>` : ""}${act("seller", x.id)}</div>`).join("");
@@ -129,13 +154,14 @@ async function doDecide(kind, id, ok, reason) {
 /* ---------- Продавцы ---------- */
 let sTimer;
 function viewSellers() {
-  V(`<input id="sq" placeholder="Поиск: имя, @username или ID" value="${esc(sq)}">
+  V(`<button class="pr" style="width:100%;margin-bottom:10px" id="chbtn">💬 Чаты с продавцами${counts.chat ? ` · ${counts.chat} нов.` : ""}</button><input id="sq" placeholder="Поиск: имя, @username или ID" value="${esc(sq)}">
   <div class="seg" style="margin-top:10px">${[["a", "Все"], ["p", "Заявки"], ["v", "На галочку"]].map(([k, n]) => `<button data-m="${k}" class="${smode === k ? "on" : ""}">${n}</button>`).join("")}</div><div id="sl"></div>`);
+  $("#chbtn").onclick = viewChats;
   $("#sq").oninput = e => { sq = e.target.value; clearTimeout(sTimer); sTimer = setTimeout(loadSellers, 300); };
   document.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { smode = b.dataset.m; viewSellers(); });
   loadSellers();
 }
-const stPill = s => s.status === "banned" ? `<span class="pill r">заблокирован</span>` : s.status === "pending" ? `<span class="pill y">заявка</span>` : "";
+const stPill = s => s.status === "banned" ? `<span class="pill r">заблокирован</span>` : s.status === "pending" ? `<span class="pill y">заявка</span>` : s.review ? `<span class="pill y">🔍 проверка</span>` : "";
 async function loadSellers() {
   const j = await api("sellers", { page: 0, mode: smode, q: sq }); const box = $("#sl"); if (!box || !j.ok) return;
   box.innerHTML = j.sellers.length ? j.sellers.map(s => `<div class="card" data-s="${s.id}" style="cursor:pointer"><div class="row">${av(s.av, s.name)}<div class="grow"><div class="t">${esc(s.name)}${s.verified ? " ✅" : ""}</div><div class="mu">${esc(s.name_lvl)} · сделок ${s.deals} · ${s.offers} товаров</div></div>${stPill(s)}${s.verify_req && !s.verified ? `<span class="pill y">✓?</span>` : ""}</div></div>`).join("") : `<div class="empty">Никого не найдено</div>`;
@@ -149,14 +175,50 @@ function openSeller(s) {
   <div><span class="mu">Баланс</span><b>${s.balance}⭐</b><span class="mu">заработано ${s.earned}⭐</span></div>
   <div><span class="mu">Товаров</span><b>${s.offers}</b><span class="mu">в работе заказов ${s.live}</span></div></div>
   ${s.about ? `<div class="mu" style="margin-top:12px">${esc(s.about)}</div>` : ""}
-  <div class="btns" style="flex-wrap:wrap"><button class="f ${s.verified ? "" : "pr"}" data-a="${s.verified ? "unverify" : "verify"}">${s.verified ? "Снять ✓" : "Выдать ✓"}</button><button class="f" data-a="${s.status === "banned" ? "unban" : "ban"}" style="${s.status === "banned" ? "" : "color:#ff8a8a"}">${s.status === "banned" ? "Разблокировать" : "Заблокировать"}</button></div>
+  <div class="card" style="margin:14px 0 0;display:flex;align-items:center;gap:12px"><div class="grow"><div class="t">🔍 Проверка</div><div class="mu">Товары скрыты из магазина, новые покупки закрыты</div></div><div style="text-align:center"><div class="sw ${s.review ? "on" : ""}" data-a="${s.review ? "review_off" : "review_on"}"></div><div class="swl ${s.review ? "on" : ""}" style="margin-top:3px">${s.review ? "идёт" : "нет"}</div></div></div>
+  <div class="btns" style="flex-wrap:wrap"><button class="f" id="gochat">💬 Чат</button><button class="f ${s.verified ? "" : "pr"}" data-a="${s.verified ? "unverify" : "verify"}">${s.verified ? "Снять ✓" : "Выдать ✓"}</button><button class="f" data-a="${s.status === "banned" ? "unban" : "ban"}" style="${s.status === "banned" ? "" : "color:#ff8a8a"}">${s.status === "banned" ? "Разблокировать" : "Заблокировать"}</button></div>
   <div class="lbl">Уровень</div><div class="btns" style="margin-top:0"><button class="f" data-a="down">−</button><button class="f" data-a="auto">Авто</button><button class="f pr" data-a="up">Повысить</button></div>
-  <div class="lbl">Написать продавцу</div><textarea id="mt" rows="2" placeholder="Текст сообщения"></textarea><div class="btns"><button class="f" data-a="msg">Отправить</button></div>`);
+`);
+  $("#gochat").onclick = () => openChat(s.id);
   document.querySelectorAll("#sh [data-a]").forEach(b => b.onclick = async () => {
-    const a = b.dataset.a, j = await api("seller_act", { id: s.id, act: a, text: a === "msg" ? $("#mt").value : "" });
-    if (j.ok) { haptic("medium"); toast(j.msg); if (j.seller && a !== "msg") openSeller(j.seller); loadSellers(); }
+    const a = b.dataset.a, j = await api("seller_act", { id: s.id, act: a, text: "" });
+    if (j.ok) { haptic("medium"); toast(j.msg); if (j.seller) openSeller(j.seller); loadSellers(); }
   });
 }
+
+/* ---------- Чаты с продавцами ---------- */
+let chatTimer, chatId = 0;
+async function viewChats() {
+  const j = await api("chats"); if (!j.ok) return;
+  sheet(`<div class="t" style="font-size:17px;margin-bottom:10px">💬 Чаты с продавцами</div>` + (j.chats.length ? j.chats.map(c => `<div class="card" data-c="${c.id}" style="cursor:pointer;margin-bottom:8px"><div class="row">${av(c.av, c.name)}<div class="grow"><div class="t">${esc(c.name)}${c.review ? " 🔍" : ""}</div><div class="mu" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.mine ? "Вы: " : ""}${esc(c.last)}</div>${seenHtml(c.seen, c.online) ? `<div class="mu" style="font-size:11px;margin-top:2px">${seenHtml(c.seen, c.online)}</div>` : ""}</div>${c.unread ? `<i class="badge" style="position:static">${c.unread}</i>` : `<span class="mu">${ago(c.t)}</span>`}</div></div>`).join("") : `<div class="empty">Чатов пока нет.<br>Открой продавца и нажми «💬 Чат», чтобы написать первым.</div>`));
+  document.querySelectorAll("#sh [data-c]").forEach(c => c.onclick = () => openChat(+c.dataset.c));
+}
+async function loadChat(first) {
+  const j = await api("chat", { id: chatId, quiet: true }); if (!j.ok || !$("#msgs")) return;
+  const box = $("#msgs"), n = box.children.length;
+  if (!first && j.msgs.length === n) return;
+  box.innerHTML = j.msgs.length ? j.msgs.map(m => `<div class="bub ${m.mine ? "me" : "he"}">${esc(m.text)}<small>${ago(m.created)}${m.mine ? (m.read ? " · ✓✓" : " · ✓") : ""}</small></div>`).join("") : `<div class="empty">Напиши первым — продавец получит уведомление в Telegram</div>`;
+  box.scrollTop = box.scrollHeight;
+  const sn = seenHtml(j.seen, j.online); if (sn) $("#cst").innerHTML = sn;
+  const sl = j.seller; $("#rvb").innerHTML = sl.review ? `<div class="rv">🔍 Продавец на проверке · товары скрыты</div>` : "";
+}
+async function openChat(id) {
+  chatId = id; clearInterval(chatTimer);
+  const j = await api("seller", { id }); if (!j.ok) return; const s = j.seller;
+  sheet(`<div class="row">${av(s.av, s.name)}<div class="grow"><div class="t" style="font-size:17px">${esc(s.name)}${s.verified ? " ✅" : ""}</div><div class="mu" id="cst">Чат с продавцом · без его разрешения</div></div><button id="cback">‹</button></div>
+  <div id="rvb"></div><div id="msgs" style="margin-top:10px"></div>
+  <div class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ct" rows="1" placeholder="Сообщение…" style="max-height:110px"></textarea><button class="pr" id="csend">➤</button></div>
+  <div class="btns" style="margin-top:8px"><button class="f" id="crev">${s.review ? "✅ Снять проверку" : "🔍 Вызвать на проверку"}</button></div>`);
+  $("#cback").onclick = () => { clearInterval(chatTimer); viewChats(); };
+  const send = async () => { const t = $("#ct").value.trim(); if (!t) return; $("#csend").disabled = true; const r = await api("chat_send", { id, text: t }); $("#csend").disabled = false; if (r.ok) { $("#ct").value = ""; haptic(); await loadChat(true); toast(r.msg); } };
+  $("#csend").onclick = send;
+  $("#ct").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
+  $("#crev").onclick = async () => { const r = await api("seller_act", { id, act: s.review ? "review_off" : "review_on" }); if (r.ok) { toast(r.msg); openChat(id); loadSellers(); } };
+  await loadChat(true);
+  chatTimer = setInterval(() => $("#msgs") && chatId === id ? loadChat(false) : clearInterval(chatTimer), 6000);
+}
+const _cs = closeSheet; closeSheet = function () { clearInterval(chatTimer); _cs(); };
+$("#sbg").onclick = () => closeSheet();
 
 /* ---------- Промо ---------- */
 async function viewPromos() {
@@ -166,7 +228,7 @@ async function viewPromos() {
 }
 function drawPromos(list) {
   const N = { shop: "🛍 Шоп", vpn: "🔐 VPN" };
-  V(`<button class="pr" style="width:100%;margin-bottom:12px" id="pnew">+ Создать промокод</button>` + (list.length ? list.map(p => `<div class="card"><div class="row"><div class="grow"><div class="t">${esc(p.code)} <span class="pill">−${p.pct}%</span> <span class="pill ${p.paused ? "y" : "g"}">${p.paused ? "пауза" : "активен"}</span></div><div class="mu">${N[p.scope]} · ${p.scope === "vpn" ? (p.left ? "осталось " + p.left : "без лимита") : "использован " + p.used + (p.max ? " из " + p.max : "")}</div></div></div><div class="btns"><button class="f" data-pa="toggle:${p.scope}:${esc(p.code)}">${p.paused ? "▶️ Включить" : "⏸ Пауза"}</button><button class="no" data-pa="delete:${p.scope}:${esc(p.code)}">🗑</button></div></div>`).join("") : `<div class="empty">Промокодов пока нет</div>`));
+  V(`<button class="pr" style="width:100%;margin-bottom:12px" id="pnew">+ Создать промокод</button>` + (list.length ? list.map(p => `<div class="card"><div class="row"><div class="grow"><div class="t">${esc(p.code)} <span class="pill">−${p.pct}%</span> <span class="pill ${p.paused ? "y" : "g"}">${p.paused ? "пауза" : "активен"}</span></div><div class="mu">${N[p.scope]} · ${p.scope === "vpn" ? (p.left ? "осталось " + p.left : "без лимита") : "использован " + p.used + (p.max ? " из " + p.max : "")}</div></div></div><div style="text-align:center"><div class="sw ${p.paused ? "on" : ""}" data-pa="toggle:${p.scope}:${esc(p.code)}"></div><div class="swl ${p.paused ? "on" : ""}" style="margin-top:3px">${p.paused ? "стоп" : "работает"}</div></div></div><div class="btns"><button class="no f" data-pa="delete:${p.scope}:${esc(p.code)}">🗑 Удалить</button></div></div>`).join("") : `<div class="empty">Промокодов пока нет</div>`));
   $("#pnew").onclick = newPromo;
   document.querySelectorAll("[data-pa]").forEach(b => b.onclick = async () => {
     const [act, scope, code] = b.dataset.pa.split(":");
@@ -192,10 +254,10 @@ function newPromo() {
 async function viewMore() {
   V(`<div class="empty">Загрузка…</div>`);
   const j = await api("overview"); if (tab !== "m") return; if (!j.ok) return V(`<div class="empty">${esc(j.msg || "Нет связи")}</div>`);
-  counts = { total: j.counts.total || 0 }; badge();
+  counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge();
   const s = j.stats.shop, v = j.stats.vpn, p = j.pause;
-  const sw = (k, n, st) => st === null ? "" : `<div class="row" style="padding:8px 0"><div class="grow"><div class="t">${n}</div><div class="mu">${st ? "продажи приостановлены" : "работает"}</div></div><div class="sw ${st ? "on" : ""}" data-sw="${k}:${st ? 0 : 1}"></div></div>`;
-  V(`<div class="sec">Приостановить продажи</div><div class="card">${sw("shop", "🛍 Azika Shop", p.shop)}${sw("vpn", "🔐 Azika VPN", p.vpn)}
+  const sw = (k, n, st) => st === null ? "" : `<div class="row" style="padding:8px 0"><div class="grow"><div class="t">${n}</div><div class="mu">${st ? "продажи приостановлены" : "работает"}</div></div><div style="text-align:center"><div class="sw ${st ? "on" : ""}" data-sw="${k}:${st ? 0 : 1}"></div><div class="swl ${st ? "on" : ""}" style="margin-top:3px">${st ? "стоп" : "работает"}</div></div></div>`;
+  V(`<div class="sec">Продажи · влево — работает, вправо — стоп</div><div class="card">${sw("shop", "🛍 Azika Shop", p.shop)}${sw("vpn", "🔐 Azika VPN", p.vpn)}
   <div class="lbl">Сообщение покупателям</div><textarea id="pm" rows="2" maxlength="200">${esc(p.msg)}</textarea><div class="btns"><button class="f" id="pmb">Сохранить текст</button><button class="no f" data-sw="all:1">Всё стоп</button><button class="ok f" data-sw="all:0">Всё вкл</button></div></div>
   ${s ? `<div class="sec">Шоп</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${s.users}</b></div><div><span class="mu">Сегодня</span><b>${s.today}</b><span class="mu">${s.today_stars}⭐</span></div><div><span class="mu">Всего оплат</span><b>${s.paid}</b><span class="mu">${s.paid_stars}⭐</span></div><div><span class="mu">Ждут выдачи</span><b>${s.wait}</b></div><div><span class="mu">Споры</span><b>${s.disputes}</b></div><div><span class="mu">Продавцов</span><b>${s.sellers}</b><span class="mu">блок ${s.sellers_banned}</span></div></div>` : ""}
   ${v ? `<div class="sec">VPN</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${v.users}</b></div><div><span class="mu">Активных</span><b>${v.active}</b></div><div><span class="mu">Оплат</span><b>${v.payments}</b></div><div><span class="mu">Сегодня</span><b>${v.payments_today}</b></div></div>` : ""}`);
@@ -206,7 +268,7 @@ async function viewMore() {
 }
 
 setTab("q");
-api("overview", { quiet: true }).then(j => { if (j.ok) { counts = { total: j.counts.total || 0 }; badge(); } });
+api("overview", { quiet: true }).then(j => { if (j.ok) { counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge(); } });
 </script>
 </body>
 </html>

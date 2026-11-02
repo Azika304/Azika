@@ -84,6 +84,9 @@ def ensure_schema():
             _addcol(c, "sellers", "verified", "INTEGER DEFAULT 0")
             _addcol(c, "sellers", "verify_req", "INTEGER DEFAULT 0")
             _addcol(c, "sellers", "verify_rej", "INTEGER DEFAULT 0")
+            _addcol(c, "sellers", "review", "INTEGER DEFAULT 0")
+            c.execute("CREATE TABLE IF NOT EXISTS seen(user_id INTEGER PRIMARY KEY, ts INTEGER)")
+            c.execute("CREATE TABLE IF NOT EXISTS admin_msgs(id INTEGER PRIMARY KEY AUTOINCREMENT, seller_id INTEGER, from_admin INTEGER, text TEXT, created INTEGER, read INTEGER DEFAULT 0)")
             c.commit()
     if os.path.exists(VPN_DB):
         with vdb() as c:
@@ -130,13 +133,13 @@ def seller_info(uid: int) -> dict | None:
         rv = c.execute("SELECT AVG(rating),COUNT(*) FROM reviews WHERE seller_id=?", (uid,)).fetchone()
         offers = c.execute("SELECT COUNT(*) FROM offers WHERE seller_id=? AND status IN ('pending','active','hidden')", (uid,)).fetchone()[0]
     with sdb() as c:
-        vreq = c.execute("SELECT COALESCE(verify_req,0) FROM sellers WHERE user_id=?", (uid,)).fetchone()[0]
+        vreq, review = c.execute("SELECT COALESCE(verify_req,0),COALESCE(review,0) FROM sellers WHERE user_id=?", (uid,)).fetchone()
     avg, cnt = (round(rv[0], 1) if rv[0] else 0.0), int(rv[1])
     auto = auto_level(deals, cnt, avg)
     eff = max(auto, min(r[4], len(LEVELS)) - 1) if r[4] else auto
     return {"id": uid, "status": r[0], "balance": r[1], "earned": r[2], "verified": bool(r[3]), "lvl_set": r[4], "lvl_db": r[5],
             "about": r[6] or "", "created": r[7] or 0, "name": r[8] or "", "username": r[9] or "", "deals": deals, "live": live,
-            "avg": avg, "cnt": cnt, "offers": offers, "auto": auto, "level": eff, "name_lvl": LEVELS[eff][0], "verify_req": vreq, "av": av_path(uid),
+            "avg": avg, "cnt": cnt, "offers": offers, "auto": auto, "level": eff, "name_lvl": LEVELS[eff][0], "verify_req": vreq, "review": bool(review), "av": av_path(uid),
             "fee": LEVELS[eff][4], "limit": LEVELS[eff][5]}
 
 
@@ -313,13 +316,74 @@ async def do_seller_act(uid: int, act: str, text: str = "") -> tuple[bool, str]:
         set_status(uid, "banned" if act == "ban" else "approved")
         await notify_seller(uid, "🚫 Продажи для тебя закрыты, товары скрыты. Вопросы — в поддержку." if act == "ban" else "✅ Твой доступ к продажам восстановлен.")
         return True, "🚫 Заблокирован, товары скрыты" if act == "ban" else "✅ Разблокирован"
+    if act in ("review_on", "review_off"):
+        on = act == "review_on"
+        with sdb() as c:
+            c.execute("UPDATE sellers SET review=? WHERE user_id=?", (1 if on else 0, uid))
+            c.commit()
+        if on:
+            await notify_seller(uid, "🔍 <b>Твой аккаунт вызван на проверку.</b>\nТвои товары временно скрыты из магазина, новые покупки недоступны. "
+                                     "Уже оплаченные заказы выполняй как обычно. Администратор напишет тебе в Azika Seller → Профиль → Сообщения.")
+        else:
+            await notify_seller(uid, "✅ Проверка завершена — твои товары снова в магазине.")
+        return True, "🔍 Продавец на проверке, товары скрыты" if on else "✅ Проверка снята, товары вернулись"
     if act == "msg":
         text = (text or "").strip()
         if not text:
             return False, "Напиши текст сообщения"
-        ok = await notify_seller(uid, f"✉️ <b>Сообщение от магазина:</b>\n{escape(text[:1500])}")
-        return ok, "✅ Отправлено" if ok else "Не доставлено (продавец не запускал бота или заблокировал его)"
+        return await chat_send(uid, text)
     return False, "Неизвестное действие"
+
+
+# ---------------------------- чаты с продавцами -----------------------
+async def chat_send(uid: int, text: str) -> tuple[bool, str]:
+    text = text.strip()[:1000]
+    with sdb() as c:
+        c.execute("INSERT INTO admin_msgs(seller_id,from_admin,text,created) VALUES(?,1,?,?)", (uid, text, int(time.time())))
+        c.commit()
+    ok = await notify_seller(uid, f"✉️ <b>Сообщение от администрации:</b>\n{escape(text)}\n\n<i>Ответить: Azika Seller → Профиль → Сообщения</i>")
+    return True, "✅ Отправлено" if ok else "Сохранено в чате (бот не смог доставить уведомление)"
+
+
+def seen_of(uid: int) -> dict:
+    if not shop_ok():
+        return {"seen": 0, "online": False}
+    with sdb() as c:
+        r = c.execute("SELECT ts FROM seen WHERE user_id=?", (uid,)).fetchone()
+    ts = int(r[0]) if r else 0
+    return {"seen": ts, "online": bool(ts) and time.time() - ts < 75}
+
+
+def touch_admin():
+    if not shop_ok():
+        return
+    try:
+        with sdb() as c:
+            c.execute("INSERT INTO seen(user_id,ts) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET ts=excluded.ts", (ADMIN_ID, int(time.time())))
+            c.commit()
+    except Exception:
+        pass
+
+
+def chats_list() -> list[dict]:
+    if not shop_ok():
+        return []
+    with sdb() as c:
+        rows = c.execute("SELECT seller_id,MAX(id),SUM(CASE WHEN from_admin=0 AND read=0 THEN 1 ELSE 0 END) FROM admin_msgs GROUP BY seller_id ORDER BY MAX(id) DESC").fetchall()
+        out = []
+        for sid, mid, unread in rows:
+            t, fa, cr = c.execute("SELECT text,from_admin,created FROM admin_msgs WHERE id=?", (mid,)).fetchone()
+            i = seller_info(sid)
+            if i:
+                out.append({"id": sid, "name": display_name(i), "av": i["av"], "last": t, "mine": bool(fa), "t": cr, "unread": unread or 0, "review": i["review"], "verified": i["verified"], **seen_of(sid)})
+    return out
+
+
+def chat_unread() -> int:
+    if not shop_ok():
+        return 0
+    with sdb() as c:
+        return c.execute("SELECT COUNT(*) FROM admin_msgs WHERE from_admin=0 AND read=0").fetchone()[0]
 
 
 # ---------------------------- промокоды -------------------------------
@@ -862,6 +926,7 @@ def admin_route(fn):
             return web.json_response({"ok": False, "msg": "Некорректный запрос"}, status=400)
         if not verify_admin(str(data.get("initData", ""))):
             return web.json_response({"ok": False, "msg": "Нет доступа: открой приложение из @azikaadmin_bot"}, status=401)
+        touch_admin()
         try:
             return web.json_response(await fn(data))
         except Exception as e:
@@ -871,7 +936,7 @@ def admin_route(fn):
 
 
 def seller_row_json(i: dict) -> dict:
-    keys = ("id", "name", "username", "status", "verified", "verify_req", "level", "name_lvl", "fee", "limit", "deals", "cnt", "avg", "offers", "balance", "earned", "av", "about", "lvl_set", "auto", "live")
+    keys = ("id", "name", "username", "status", "verified", "review", "verify_req", "level", "name_lvl", "fee", "limit", "deals", "cnt", "avg", "offers", "balance", "earned", "av", "about", "lvl_set", "auto", "live")
     d = {k: i[k] for k in keys}
     d["name"] = display_name(i)
     d["levels"] = [{"level": n, "name": l[0], "fee": l[4], "limit": l[5]} for n, l in enumerate(LEVELS)]
@@ -880,7 +945,7 @@ def seller_row_json(i: dict) -> dict:
 
 @admin_route
 async def api_overview(d):
-    return {"ok": True, "counts": queue_counts() if shop_ok() else {}, "pause": {**pause_state(), "msg": kv_get(sdb, "pause_msg", DEFAULT_PAUSE) if shop_ok() else DEFAULT_PAUSE},
+    return {"ok": True, "chat_unread": chat_unread(), "counts": queue_counts() if shop_ok() else {}, "pause": {**pause_state(), "msg": kv_get(sdb, "pause_msg", DEFAULT_PAUSE) if shop_ok() else DEFAULT_PAUSE},
             "stats": stats(), "shop_ok": shop_ok(), "vpn_ok": vpn_ok()}
 
 
@@ -914,6 +979,35 @@ async def api_seller_act(d):
     ok, msg = await do_seller_act(uid, str(d.get("act", "")), str(d.get("text", "")))
     i = seller_info(uid)
     return {"ok": ok, "msg": msg, "seller": seller_row_json(i) if i else None}
+
+
+@admin_route
+async def api_chats(d):
+    return {"ok": True, "chats": chats_list()}
+
+
+@admin_route
+async def api_chat(d):
+    uid = int(d.get("id", 0))
+    i = seller_info(uid)
+    if not i:
+        return {"ok": False, "msg": "Продавец не найден"}
+    with sdb() as c:
+        rows = c.execute("SELECT id,from_admin,text,created,read FROM admin_msgs WHERE seller_id=? ORDER BY id DESC LIMIT 100", (uid,)).fetchall()[::-1]
+        c.execute("UPDATE admin_msgs SET read=1 WHERE seller_id=? AND from_admin=0 AND read=0", (uid,))
+        c.commit()
+    return {"ok": True, "seller": seller_row_json(i), "msgs": [{"id": r[0], "mine": bool(r[1]), "text": r[2], "created": r[3], "read": bool(r[4])} for r in rows], **seen_of(uid)}
+
+
+@admin_route
+async def api_chat_send(d):
+    uid, text = int(d.get("id", 0)), str(d.get("text", "")).strip()
+    if not seller_info(uid):
+        return {"ok": False, "msg": "Продавец не найден"}
+    if not text:
+        return {"ok": False, "msg": "Напиши сообщение"}
+    ok, msg = await chat_send(uid, text)
+    return {"ok": ok, "msg": msg}
 
 
 @admin_route
@@ -961,7 +1055,7 @@ async def api_pause(d):
 def build_api() -> web.Application:
     app = web.Application(client_max_size=1024 * 1024)
     for name, fn in (("overview", api_overview), ("queue", api_queue), ("decide", api_decide), ("sellers", api_sellers), ("seller", api_seller),
-                     ("seller_act", api_seller_act), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause)):
+                     ("seller_act", api_seller_act), ("chats", api_chats), ("chat", api_chat), ("chat_send", api_chat_send), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause)):
         app.router.add_post(f"/api/{name}", fn)
     return app
 
