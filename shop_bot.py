@@ -2273,6 +2273,20 @@ async def api_avatar(request):
     return web.FileResponse(path, headers={"Cache-Control": "public, max-age=3600"})
 
 
+def chat_order_card(o: dict, uid: int) -> dict:
+    """Карточка купленного товара наверху чата: её видят и покупатель, и продавец."""
+    imgs = image_versions()
+    info = pack_info(o["pack"])
+    gid = info[0]["id"] if info else ""
+    key = o["pack"] if o["pack"] in imgs else gid
+    return {"id": o["id"], "label": o["label"], "game": o["game"], "stars": o["stars"], "status": o["status"],
+            "img": f"/api/img/{key}?v={imgs[key]}" if key in imgs else "",
+            "player": o["player"] or "", "comment": o["comment"] or "",
+            "seller_name": seller_name(o["seller_id"]) or "Продавец", "buyer_name": (user_info(o["user_id"]).split(" @")[0]) or "Покупатель",
+            "role": "buyer" if uid == o["user_id"] else "seller",
+            "paid_ts": o.get("paid_at") or o["created"], "delivered_ts": o.get("delivered_at") or 0, "done_ts": o.get("done_at") or 0}
+
+
 def chat_messages(oid: int, uid: int, limit: int = 80) -> list:
     with closing(db()) as c:
         rows = c.execute("SELECT id,from_id,text,created,read FROM messages WHERE order_id=? ORDER BY id DESC LIMIT ?", (oid, limit)).fetchall()
@@ -2280,7 +2294,7 @@ def chat_messages(oid: int, uid: int, limit: int = 80) -> list:
         c.commit()
         sid = (c.execute("SELECT seller_id FROM orders WHERE id=?", (oid,)).fetchone() or [0])[0]
     return [{"id": r[0], "mine": r[1] == uid, "text": r[2], "time": time.strftime("%d.%m %H:%M", time.gmtime(r[3] + 7 * 3600)),
-             "read": bool(r[4]), "av": av_url(r[1], r[1] == sid)}
+             "read": bool(r[4]), "av": av_url(r[1], r[1] == sid), "ts": r[3]}
             for r in reversed(rows)]
 
 
@@ -2617,7 +2631,7 @@ async def api_chat_messages(request):
     return web.json_response({"ok": True, "peer": peer, "label": o["label"], "open": o["status"] in CHAT_OPEN,
                               "peer_av": av_url(o["seller_id"], True) if user["id"] == o["user_id"] else av_url(o["user_id"]), "me_av": av_url(user["id"], user["id"] == o["seller_id"]),
                               **{"peer_" + k: v for k, v in seen_of(o["seller_id"] if user["id"] == o["user_id"] else o["user_id"]).items()},
-                              "messages": chat_messages(oid, user["id"])})
+                              "order": chat_order_card(o, user["id"]), "messages": chat_messages(oid, user["id"])})
 
 
 async def api_chat_send(request):
