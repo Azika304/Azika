@@ -319,6 +319,13 @@ textarea.f{resize:none;height:58px}
 .cli i{font-style:normal;background:var(--pink);color:#fff;border-radius:99px;padding:2px 9px;font-size:11px;font-weight:800}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 .onl{color:#2ee6a6;font-weight:700}.onl::first-letter{animation:onl 1.6s infinite}@keyframes onl{50%{opacity:.35}}
+#cf{position:fixed;left:0;right:0;top:0;height:100vh;z-index:60;background:var(--solid);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.9,.2,1)}
+#cf.show{transform:none}
+.cfh{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;border-bottom:1px solid var(--line);flex:none}
+.cfh>div{min-width:0}.cfh h3{margin:0;font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cfh p{margin:2px 0 0;font-size:12px;color:var(--muted);font-weight:700}
+.cfb{width:38px;height:38px;border:0;border-radius:50%;background:var(--card2);color:var(--text);font:700 26px/1 Manrope,sans-serif;cursor:pointer;flex:none;padding:0 0 3px}
+.cfm{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 14px 0;max-width:640px;width:100%;margin:0 auto}
+#cf .chat{flex:1;height:auto;min-height:0}#cf .cin{margin:8px 0 calc(10px + env(safe-area-inset-bottom))}#cf .cin .f{font-size:16px}#cf .chnote{margin:0 0 calc(8px + env(safe-area-inset-bottom));margin-top:-4px}
 </style>
 </head>
 <body>
@@ -600,6 +607,21 @@ function sheetOpen(html) {
   $("#sx").onclick = () => { haptic(); closeSheet(); };
   $("#ov").classList.add("show"); setBack(true);
 }
+/* отдельная страница чата на весь экран (клавиатура не закрывает переписку) */
+function fullOpen(head, body) {
+  stopChat(); const old = document.getElementById("cf"); if (old) old.remove();
+  const f = document.createElement("div"); f.id = "cf";
+  f.innerHTML = `<div class="cfh"><button class="cfb" id="cfBack" aria-label="Назад">‹</button>${head}</div><div class="cfm">${body}</div>`;
+  document.body.appendChild(f); requestAnimationFrame(() => f.classList.add("show"));
+  const vv = window.visualViewport, fit = () => { f.style.height = (vv ? vv.height : innerHeight) + "px"; f.style.top = (vv ? vv.offsetTop : 0) + "px"; const b = document.getElementById("chBox"); if (b) b.scrollTop = b.scrollHeight; };
+  fit(); if (vv) { vv.addEventListener("resize", fit); vv.addEventListener("scroll", fit); f._off = () => { vv.removeEventListener("resize", fit); vv.removeEventListener("scroll", fit); }; }
+  document.getElementById("cfBack").onclick = () => { try { haptic(); } catch (e) {} fullClose(); };
+  try { setBack(true); } catch (e) {}
+}
+function fullClose() {
+  stopChat(); const f = document.getElementById("cf"); if (!f) return; f._off && f._off(); f.classList.remove("show"); setTimeout(() => f.remove(), 330);
+  try { setBack(typeof state !== "undefined" && !!state.game); } catch (e) {}
+}
 function closeSheet() { stopChat(); $("#ov").classList.remove("show"); setBack(!!state.game); }
 $("#ov").onclick = e => { if (e.target.id === "ov") closeSheet(); };
 
@@ -796,8 +818,8 @@ const CHAT_INTRO = `<div class="cintro" id="cintro"><b>💬 Как работа�
   <button id="cintroOk">Понятно</button></div>`;
 async function openChat(order, peer, label) {
   const me = tg && tg.initDataUnsafe && tg.initDataUnsafe.user || {};
-  sheetOpen(`<div class="sh-h"><div class="chh"><span id="chAv">${avEl("", peer, "big")}</span><div><h3 id="chT">${esc(peer || "Чат")}</h3><p id="chS">${esc(label || "Заказ #" + order)} · #${order}</p></div></div></div>
-    ${store("chat_intro1") ? "" : CHAT_INTRO}
+  fullOpen(`<span id="chAv">${avEl("", peer, "big")}</span><div><h3 id="chT">${esc(peer || "Чат")}</h3><p id="chS">${esc(label || "Заказ #" + order)} · #${order}</p></div>`,
+    `${store("chat_intro1") ? "" : CHAT_INTRO}
     <div class="chat" id="chBox"><div class="sk" style="height:60px"></div></div>
     <div class="cin"><input class="f" id="chIn" maxlength="500" placeholder="Сообщение…" autocomplete="off"><button id="chSend" aria-label="Отправить">➤</button></div>
     <div class="chnote">🔒 Ссылки, @username и телефоны запрещены — общение только здесь</div>`);
@@ -1087,6 +1109,7 @@ function confetti() {
 /* ---------- Навигация ---------- */
 function setBack(on) { if (tg && tg.BackButton) tg.BackButton[on ? "show" : "hide"](); }
 if (tg && tg.BackButton) tg.BackButton.onClick(() => {
+  if ($("#cf")) { fullClose(); return; }
   if ($("#ov").classList.contains("show")) { closeSheet(); return; }
   if (state.game) { state.game = null; if (state.tab === "shop") showHome(); }
 });
