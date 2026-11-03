@@ -210,7 +210,7 @@ textarea.f{resize:none;height:58px}
 /* --- профиль --- */
 .me{display:flex;align-items:center;gap:14px;margin:4px 0 16px}
 .ava{width:72px;height:72px;border-radius:24px;background:var(--grad);display:grid;place-items:center;color:#fff;font:800 28px Unbounded,Manrope,sans-serif;overflow:hidden;box-shadow:0 10px 24px rgba(192,38,211,.42);flex:none}
-.ava img{width:100%;height:100%;object-fit:cover}
+.ava img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .me h3{margin:0;font:800 19px Unbounded,Manrope,sans-serif}.me p{margin:4px 0 0;color:var(--muted);font-size:13px;font-weight:600}
 .lvl{display:inline-flex;align-items:center;gap:6px;margin-top:2px;padding:6px 12px;border:0;cursor:pointer;font-family:inherit;border-radius:99px;background:rgba(139,92,246,.2);color:#c4b5fd;font-weight:800;font-size:13px}
 :root[data-theme=light] .lvl{color:var(--v2)}
@@ -936,7 +936,7 @@ function openAvatar(p, name, done) {
     <input type="file" id="avF" accept="image/*" style="display:none">
     <button class="btn" id="avPick">📷 Выбрать фото</button>
     ${p.av_custom ? '<button class="btn ghost" id="avRst" style="margin-top:10px">↩️ Вернуть фото из Telegram</button>' : ""}
-    <div class="hint" style="text-align:center;margin-top:10px">Квадратное фото лучше всего. Если ничего не выбрано, показывается фото из Telegram.</div>`);
+    <div class="hint" style="text-align:center;margin-top:10px">Квадратное фото лучше всего. Это фото покупателя. У продавца в Azika Seller может быть своё отдельное. Если ничего не выбрано, показывается фото из Telegram.</div>`);
   $("#avPick").onclick = () => $("#avF").click();
   $("#avF").onchange = async () => { const f = $("#avF").files[0]; if (!f) return; $("#avPick").disabled = true;
     try { const d = await cropImg(f); const r = await api("/api/avatar_set", { data: d }); if (!r.ok) { toast(r.msg || "Не получилось"); $("#avPick").disabled = false; return; }

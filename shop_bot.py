@@ -2176,16 +2176,20 @@ def av_sig(uid: int) -> str:
     return hmac.new(BOT_TOKEN.encode(), f"av{uid}".encode(), hashlib.sha256).hexdigest()[:16]
 
 
-def _av_custom(uid: int) -> str:
-    return os.path.join(IMG_DIR, f"avc_{uid}.jpg")
+def _av_custom(uid: int, seller: bool = False) -> str:
+    """Своё фото: avc_ — как покупатель, avs_ — отдельное фото продавца (у продавца: avs → avc → фото Telegram)."""
+    return os.path.join(IMG_DIR, f"{'avs' if seller else 'avc'}_{uid}.jpg")
 
 
-def av_url(uid: int) -> str:
+def av_url(uid: int, seller: bool = False) -> str:
     if not uid:
         return ""
-    p = _av_custom(uid)
-    v = int(os.path.getmtime(p)) if os.path.exists(p) else 0
-    return f"/api/avatar/{uid}?t={av_sig(uid)}&v={v}"
+    v = 0
+    for p in ([_av_custom(uid, True)] if seller else []) + [_av_custom(uid)]:
+        if os.path.exists(p):
+            v = int(os.path.getmtime(p))
+            break
+    return f"/api/avatar/{uid}?t={av_sig(uid)}&v={v}" + ("&r=s" if seller else "")
 
 
 async def api_avatar_set(request):
@@ -2202,20 +2206,22 @@ async def api_avatar_set(request):
         return web.json_response({"ok": False, "msg": "Нужна картинка JPEG или PNG до 2 МБ"})
     if not rate_ok(-user["id"], 6, 600):   # отдельный счётчик, не мешает чату
         return web.json_response({"ok": False, "msg": "Слишком часто, подожди немного"})
-    with open(_av_custom(user["id"]), "wb") as f:
+    sel = str(data.get("role", "")) == "seller"
+    with open(_av_custom(user["id"], sel), "wb") as f:
         f.write(blob)
-    return web.json_response({"ok": True, "av": av_url(user["id"]), "av_custom": True})
+    return web.json_response({"ok": True, "av": av_url(user["id"], sel), "av_custom": True})
 
 
 async def api_avatar_reset(request):
-    user, _ = await _auth(request)
+    user, data = await _auth(request)
     if not user:
         return _deny()
+    sel = str(data.get("role", "")) == "seller"
     try:
-        os.remove(_av_custom(user["id"]))
+        os.remove(_av_custom(user["id"], sel))
     except OSError:
         pass
-    return web.json_response({"ok": True, "av": av_url(user["id"]), "av_custom": False})
+    return web.json_response({"ok": True, "av": av_url(user["id"], sel), "av_custom": os.path.exists(_av_custom(user["id"], sel))})
 
 
 async def api_avatar(request):
@@ -2226,9 +2232,9 @@ async def api_avatar(request):
         return web.Response(status=404)
     if not hmac.compare_digest(request.query.get("t", ""), av_sig(uid)):
         return web.Response(status=403)
-    cust = _av_custom(uid)
-    if os.path.exists(cust):   # фото, которое человек загрузил сам
-        return web.FileResponse(cust, headers={"Cache-Control": "public, max-age=3600"})
+    for cust in ([_av_custom(uid, True)] if request.query.get("r") == "s" else []) + [_av_custom(uid)]:
+        if os.path.exists(cust):   # фото, которое человек загрузил сам
+            return web.FileResponse(cust, headers={"Cache-Control": "public, max-age=3600"})
     path = os.path.join(IMG_DIR, f"av_{uid}.jpg")
     none = path + ".none"
     now = time.time()
@@ -2272,8 +2278,9 @@ def chat_messages(oid: int, uid: int, limit: int = 80) -> list:
         rows = c.execute("SELECT id,from_id,text,created,read FROM messages WHERE order_id=? ORDER BY id DESC LIMIT ?", (oid, limit)).fetchall()
         c.execute("UPDATE messages SET read=1 WHERE order_id=? AND to_id=?", (oid, uid))
         c.commit()
+        sid = (c.execute("SELECT seller_id FROM orders WHERE id=?", (oid,)).fetchone() or [0])[0]
     return [{"id": r[0], "mine": r[1] == uid, "text": r[2], "time": time.strftime("%d.%m %H:%M", time.gmtime(r[3] + 7 * 3600)),
-             "read": bool(r[4]), "av": av_url(r[1])}
+             "read": bool(r[4]), "av": av_url(r[1], r[1] == sid)}
             for r in reversed(rows)]
 
 
@@ -2318,7 +2325,7 @@ def my_chats(uid: int) -> list:
             unread = c.execute("SELECT COUNT(*) FROM messages WHERE order_id=? AND to_id=? AND read=0", (oid, uid)).fetchone()[0]
             peer = (seller_name(seller) or "Продавец") if uid == buyer else ((user_info(buyer).split(" @")[0]) or "Покупатель")
             out.append({"order": oid, "label": label, "game": game, "status": st, "role": "buyer" if uid == buyer else "seller",
-                        "peer": peer, "last": last[0] if last else "", "unread": unread, "av": av_url(seller if uid == buyer else buyer)})
+                        "peer": peer, "last": last[0] if last else "", "unread": unread, "av": av_url(seller, True) if uid == buyer else av_url(buyer)})
     return out
 
 
@@ -2526,7 +2533,7 @@ def seller_payload(uid: int) -> dict:
         escrow = sum(r[0] * (100 - _fee) // 100 for r in c.execute(
             "SELECT stars FROM orders WHERE seller_id=? AND status IN ('paid','delivered','dispute')", (uid,)))
     avg, cnt = rating_of(uid)
-    return {"id": uid, "av": av_url(uid), "av_custom": os.path.exists(_av_custom(uid)), "status": sl["status"], "balance": sl["balance"], "earned": sl["earned"], "pending_payout": pend,
+    return {"id": uid, "av": av_url(uid, True), "av_custom": os.path.exists(_av_custom(uid, True)), "status": sl["status"], "balance": sl["balance"], "earned": sl["earned"], "pending_payout": pend,
             "deals": deals, "avg": avg, "reviews": cnt, "fee": seller_fee(uid), "level": seller_level(uid), "offers_used": sum(1 for o in rows if o[6] in ("pending", "active", "hidden")), "payout_min": PAYOUT_MIN,
             "seller_bot": SELLER_BOT_USERNAME, "ad_price": AD_PRICE, "verified": bool(sl.get("verified")), "verify": verify_state(uid, sl),
             "escrow": escrow, "auto_days": AUTO_CONFIRM_DAYS, "name": seller_name(uid),
@@ -2608,7 +2615,7 @@ async def api_chat_messages(request):
         return web.json_response({"ok": False, "msg": "Нет доступа"})
     peer = (seller_name(o["seller_id"]) or "Продавец") if user["id"] == o["user_id"] else ((user_info(o["user_id"]).split(" @")[0]) or "Покупатель")
     return web.json_response({"ok": True, "peer": peer, "label": o["label"], "open": o["status"] in CHAT_OPEN,
-                              "peer_av": av_url(o["seller_id"] if user["id"] == o["user_id"] else o["user_id"]), "me_av": av_url(user["id"]),
+                              "peer_av": av_url(o["seller_id"], True) if user["id"] == o["user_id"] else av_url(o["user_id"]), "me_av": av_url(user["id"], user["id"] == o["seller_id"]),
                               **{"peer_" + k: v for k, v in seen_of(o["seller_id"] if user["id"] == o["user_id"] else o["user_id"]).items()},
                               "messages": chat_messages(oid, user["id"])})
 
@@ -2833,9 +2840,7 @@ def skb(*rows) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=t, callback_data=d) for t, d in r] for r in rows])
 
 
-S_MENU = skb([("📦 Мои товары", "s:offers"), ("➕ Добавить товар", "s:add")],
-             [("🎟 Промокоды", "s:promos"), ("📢 Реклама", "s:ads")],
-             [("💬 Чаты", "s:chats"), ("💰 Баланс и вывод", "s:bal")],
+S_MENU = skb([("💰 Баланс и вывод", "s:bal")],
              [("⭐ Отзывы", "s:rev")])
 S_BACK = skb([("« Меню", "s:menu")])
 FX = {"party": "5046509860389126442", "fire": "5104841245755180586", "like": "5107584321108051014"}   # эффекты сообщений Telegram

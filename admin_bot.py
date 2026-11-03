@@ -117,9 +117,13 @@ def av_path(uid: int) -> str:
     if not SHOP_TOKEN:
         return ""
     sig = hmac.new(SHOP_TOKEN.encode(), f"av{uid}".encode(), hashlib.sha256).hexdigest()[:16]
-    p = os.path.join(SHOP_IMG_DIR, f"avc_{uid}.jpg")
-    v = int(os.path.getmtime(p)) if os.path.exists(p) else 0
-    return f"/api/avatar/{uid}?t={sig}&v={v}"
+    v = 0
+    for name in ("avs", "avc"):   # у продавца своё фото продавца, потом общее, потом Telegram
+        p = os.path.join(SHOP_IMG_DIR, f"{name}_{uid}.jpg")
+        if os.path.exists(p):
+            v = int(os.path.getmtime(p))
+            break
+    return f"/api/avatar/{uid}?t={sig}&v={v}&r=s"
 
 
 def seller_info(uid: int) -> dict | None:
@@ -318,18 +322,21 @@ async def do_seller_act(uid: int, act: str, text: str = "") -> tuple[bool, str]:
         return True, "🚫 Заблокирован, товары скрыты" if act == "ban" else "✅ Разблокирован"
     if act in ("review_on", "review_off"):
         on = act == "review_on"
+        text = (text or "").strip()[:1000]
         with sdb() as c:
             c.execute("UPDATE sellers SET review=? WHERE user_id=?", (1 if on else 0, uid))
             c.commit()
-        with sdb() as c:   # сразу заводим чат, чтобы продавец появился в «Чатах»
-            c.execute("INSERT INTO admin_msgs(seller_id,from_admin,text,created) VALUES(?,1,?,?)", (uid, "🔍 Ваш аккаунт вызван на проверку. Товары скрыты из магазина. Ответьте на вопросы администрации здесь." if on else "✅ Проверка завершена, товары вернулись в магазин.", int(time.time())))
-            c.commit()
+        if text.strip() == "-":   # «снять без сообщения»
+            return True, "✅ Проверка снята, товары вернулись" if not on else "🔍 Продавец на проверке"
         if on:
-            await notify_seller(uid, "🔍 <b>Твой аккаунт вызван на проверку.</b>\nТвои товары временно скрыты из магазина, новые покупки недоступны. "
-                                     "Уже оплаченные заказы выполняй как обычно. Администратор напишет тебе в Azika Seller → Профиль → Сообщения.")
+            text = text or "🔍 Ваш аккаунт вызван на проверку. Товары временно скрыты из магазина, новые покупки закрыты. Уже оплаченные заказы выполняйте как обычно. Ответьте на вопросы администрации здесь."
         else:
-            await notify_seller(uid, "✅ Проверка завершена — твои товары снова в магазине.")
-        return True, "🔍 Продавец на проверке, товары скрыты" if on else "✅ Проверка снята, товары вернулись"
+            text = text or "✅ Вы прошли проверку, поздравляем! Ваши товары снова в магазине."
+        with sdb() as c:   # сообщение попадает в чат, поэтому продавец сразу появляется в «Чатах»
+            c.execute("INSERT INTO admin_msgs(seller_id,from_admin,text,created) VALUES(?,1,?,?)", (uid, text, int(time.time())))
+            c.commit()
+        await notify_seller(uid, ("🔍 <b>Проверка аккаунта</b>\n" if on else "✅ <b>Проверка завершена</b>\n") + escape(text) + "\n\n<i>Ответить: Azika Seller → Чаты → Администрация</i>")
+        return True, "🔍 Продавец на проверке, товары скрыты" if on else "✅ Проверка снята, продавец уведомлён"
     if act == "msg":
         text = (text or "").strip()
         if not text:
@@ -344,7 +351,7 @@ async def chat_send(uid: int, text: str) -> tuple[bool, str]:
     with sdb() as c:
         c.execute("INSERT INTO admin_msgs(seller_id,from_admin,text,created) VALUES(?,1,?,?)", (uid, text, int(time.time())))
         c.commit()
-    ok = await notify_seller(uid, f"✉️ <b>Сообщение от администрации:</b>\n{escape(text)}\n\n<i>Ответить: Azika Seller → Профиль → Сообщения</i>")
+    ok = await notify_seller(uid, f"✉️ <b>Сообщение от администрации:</b>\n{escape(text)}\n\n<i>Ответить: Azika Seller → Чаты → Администрация</i>")
     return True, "✅ Отправлено" if ok else "Сохранено в чате (бот не смог доставить уведомление)"
 
 

@@ -175,15 +175,30 @@ function openSeller(s) {
   <div><span class="mu">Баланс</span><b>${s.balance}⭐</b><span class="mu">заработано ${s.earned}⭐</span></div>
   <div><span class="mu">Товаров</span><b>${s.offers}</b><span class="mu">в работе заказов ${s.live}</span></div></div>
   ${s.about ? `<div class="mu" style="margin-top:12px">${esc(s.about)}</div>` : ""}
-  <div class="card" style="margin:14px 0 0;display:flex;align-items:center;gap:12px"><div class="grow"><div class="t">🔍 Проверка</div><div class="mu">Товары скрыты из магазина, новые покупки закрыты</div></div><div style="text-align:center"><div class="sw ${s.review ? "on" : ""}" data-a="${s.review ? "review_off" : "review_on"}"></div><div class="swl ${s.review ? "on" : ""}" style="margin-top:3px">${s.review ? "идёт" : "нет"}</div></div></div>
+  ${s.review ? `<div class="rv">🔍 Продавец на проверке · его товары скрыты из магазина</div><button class="ok" style="width:100%;margin-top:10px" id="revoff">✅ Завершить проверку</button>` : `<button style="width:100%;margin-top:14px" id="revon">🔍 Вызвать на проверку</button>`}
   <div class="btns" style="flex-wrap:wrap"><button class="f" id="gochat">💬 Чат</button><button class="f ${s.verified ? "" : "pr"}" data-a="${s.verified ? "unverify" : "verify"}">${s.verified ? "Снять ✓" : "Выдать ✓"}</button><button class="f" data-a="${s.status === "banned" ? "unban" : "ban"}" style="${s.status === "banned" ? "" : "color:#ff8a8a"}">${s.status === "banned" ? "Разблокировать" : "Заблокировать"}</button></div>
   <div class="lbl">Уровень</div><div class="btns" style="margin-top:0"><button class="f" data-a="down">−</button><button class="f" data-a="auto">Авто</button><button class="f pr" data-a="up">Повысить</button></div>
 `);
   $("#gochat").onclick = () => openChat(s.id);
+  if ($("#revon")) $("#revon").onclick = () => reviewSheet(s, true);
+  if ($("#revoff")) $("#revoff").onclick = () => reviewSheet(s, false);
   document.querySelectorAll("#sh [data-a]").forEach(b => b.onclick = async () => {
     const a = b.dataset.a, j = await api("seller_act", { id: s.id, act: a, text: "" });
-    if (j.ok) { haptic("medium"); toast(j.msg); loadSellers(); if (a === "review_on") openChat(s.id); else if (j.seller) openSeller(j.seller); }
+    if (j.ok) { haptic("medium"); toast(j.msg); loadSellers(); if (j.seller) openSeller(j.seller); }
   });
+}
+
+function reviewSheet(s, on) {
+  const def = on ? "Ваш аккаунт вызван на проверку. Товары временно скрыты из магазина. Пожалуйста, ответьте на вопросы администрации в этом чате." : "Вы прошли проверку, поздравляем! 🎉 Ваши товары снова в магазине.";
+  sheet(`<div class="t" style="font-size:17px">${on ? "🔍 Вызвать на проверку" : "✅ Завершить проверку"}</div>
+  <div class="mu" style="margin-top:4px">${esc(s.name)} · продавец получит это сообщение в Telegram и в чате</div>
+  <textarea id="rvt" rows="5" maxlength="1000" style="margin-top:12px">${esc(def)}</textarea>
+  <div class="btns"><button class="f" id="rvc">Отмена</button><button class="${on ? "pr" : "ok"} f" id="rvg">${on ? "Вызвать" : "Снять и отправить"}</button></div>
+  ${on ? "" : `<button class="f" style="width:100%;margin-top:8px" id="rvq">Снять без сообщения</button>`}`);
+  $("#rvc").onclick = () => openSeller(s);
+  const go = async text => { const j = await api("seller_act", { id: s.id, act: on ? "review_on" : "review_off", text }); if (j.ok) { haptic("medium"); toast(j.msg); loadSellers(); openChat(s.id); } };
+  $("#rvg").onclick = () => go($("#rvt").value);
+  if ($("#rvq")) $("#rvq").onclick = () => go("-");
 }
 
 /* ---------- Чаты с продавцами ---------- */
@@ -208,12 +223,12 @@ async function openChat(id) {
   sheet(`<div class="row">${av(s.av, s.name)}<div class="grow"><div class="t" style="font-size:17px">${esc(s.name)}${s.verified ? " ✅" : ""}</div><div class="mu" id="cst">Чат с продавцом · без его разрешения</div></div><button id="cback">‹</button></div>
   <div id="rvb"></div><div id="msgs" style="margin-top:10px"></div>
   <div class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ct" rows="1" placeholder="Сообщение…" style="max-height:110px"></textarea><button class="pr" id="csend">➤</button></div>
-  <div class="btns" style="margin-top:8px"><button class="f" id="crev">${s.review ? "✅ Снять проверку" : "🔍 Вызвать на проверку"}</button></div>`);
+  <div class="btns" style="margin-top:8px"><button class="f" id="crev">${s.review ? "✅ Завершить проверку" : "🔍 Вызвать на проверку"}</button></div>`);
   $("#cback").onclick = () => { clearInterval(chatTimer); viewChats(); };
   const send = async () => { const t = $("#ct").value.trim(); if (!t) return; $("#csend").disabled = true; const r = await api("chat_send", { id, text: t }); $("#csend").disabled = false; if (r.ok) { $("#ct").value = ""; haptic(); await loadChat(true); toast(r.msg); } };
   $("#csend").onclick = send;
   $("#ct").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
-  $("#crev").onclick = async () => { const r = await api("seller_act", { id, act: s.review ? "review_off" : "review_on" }); if (r.ok) { toast(r.msg); openChat(id); loadSellers(); } };
+  $("#crev").onclick = () => reviewSheet(s, !s.review);
   await loadChat(true);
   chatTimer = setInterval(() => $("#msgs") && chatId === id ? loadChat(false) : clearInterval(chatTimer), 6000);
 }

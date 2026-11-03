@@ -117,7 +117,7 @@ input.f:focus,textarea.f:focus{border-color:var(--a1)}textarea.f{resize:none;hei
 .req i{flex:none;width:22px;height:22px;border-radius:50%;background:var(--card2);display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:800;color:var(--muted)}.req.ok i{background:var(--a2);color:var(--onA)}
 .req b{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}.req.ok b{color:var(--a2)}
 .me{display:flex;gap:14px;align-items:center;margin:6px 2px 16px}
-.me .ava{flex:none;width:72px;height:72px;border-radius:24px;background:var(--grad);display:grid;place-items:center;font-size:30px;font-weight:800;color:var(--onA);overflow:hidden;box-shadow:0 8px 22px rgba(20,184,166,.35)}.me .ava img{width:100%;height:100%;object-fit:cover}
+.me .ava{flex:none;width:72px;height:72px;border-radius:24px;background:var(--grad);display:grid;place-items:center;font-size:30px;font-weight:800;color:var(--onA);overflow:hidden;box-shadow:0 8px 22px rgba(20,184,166,.35)}.me .ava img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .me h3{margin:0;font-size:21px;font-weight:800;display:flex;align-items:center;gap:6px}.me p{margin:2px 0 8px;color:var(--muted);font-size:13px}
 .lvl{border:0;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-top:2px;padding:6px 12px;border-radius:99px;background:rgba(46,230,166,.16);color:var(--a2);font:800 13px Manrope,sans-serif}.lvl.pulse{animation:lvlp 1.6s ease-out infinite}
 @keyframes lvlp{0%{box-shadow:0 0 0 0 rgba(46,230,166,.7)}70%{box-shadow:0 0 0 10px rgba(46,230,166,0)}100%{box-shadow:0 0 0 0 rgba(46,230,166,0)}}
@@ -421,21 +421,19 @@ async function showMoney() {
   const nm = me.name || u.first_name || "Продавец", L = sellerLevel(me);
   view(`<div class="me"><div class="ava" id="ava">${esc(nm.slice(0, 1).toUpperCase())}${me.av ? `<img src="${esc(API + me.av)}" ${u.photo_url ? `data-f="${esc(u.photo_url)}"` : ""} alt="" onerror="if(this.dataset.f){this.src=this.dataset.f;this.removeAttribute('data-f')}else this.remove()">` : (u.photo_url ? `<img src="${esc(u.photo_url)}" alt="">` : "")}<span class="avedit">✎</span></div>
       <div><h3>${esc(nm)} ${me.verified ? '<span class="ck">✓</span>' : ""}</h3><p>${u.username ? "@" + esc(u.username) + " · " : ""}ID ${me.id}</p><div class="lvrow"><button class="lvl ${store("lvl_seen2") ? "" : "pulse"}" id="lvl">⚡ ${esc(L.cur.name)} <small>· ${L.cur.fee}%</small> ›</button>${store("lvl_seen2") ? "" : '<span class="tapme">👈 нажми</span>'}</div></div></div>
-    ${me.review ? '<div class="note" style="margin:0 0 12px;background:rgba(255,200,61,.14);color:var(--gold);font-size:13px">🔍 <b>Твой аккаунт на проверке.</b> Товары временно скрыты из магазина, новые покупки закрыты. Уже оплаченные заказы выполняй как обычно. Напиши администрации в «Сообщения».</div>' : ""}
+    ${me.review ? '<div class="note" style="margin:0 0 12px;background:rgba(255,200,61,.14);color:var(--gold);font-size:13px">🔍 <b>Твой аккаунт на проверке.</b> Товары временно скрыты из магазина, новые покупки закрыты. Уже оплаченные заказы выполняй как обычно. Напиши администрации во вкладке «Чаты».</div>' : ""}
     <div class="card"><h4>Баланс</h4><div class="kv"><div class="g"><b>${me.balance}</b><span>доступно ⭐</span></div><div class="w"><b>${me.escrow || 0}</b><span>в сделках ⭐</span></div><div><b>${me.earned}</b><span>заработано ⭐</span></div></div>
     <p>«В сделках» — деньги покупателей, которые держит магазин до подтверждения получения.${me.pending_payout ? `<br>На выводе: <b>${me.pending_payout} ⭐</b> (ждёт админа)` : ""}</p>
     <button class="btn" id="po">💸 Вывести</button></div>
     <div class="card"><h4>Мой профиль</h4><div class="kv"><div><b>${me.deals}</b><span>сделок</span></div><div><b>${me.reviews ? "★ " + me.avg : "—"}</b><span>рейтинг</span></div><div><b>${me.reviews}</b><span>отзывов</span></div></div>
       ${verifyBlock(me)}
       <button class="btn ghost" id="rv">⭐ Мои отзывы</button></div>
-    <button class="btn ghost" id="adm" style="margin-bottom:10px">📨 Сообщения от администрации${me.admin_unread ? ` · <b style="color:var(--bad)">${me.admin_unread} нов.</b>` : ""}</button>
     <button class="btn ghost" id="sup" style="margin-bottom:12px">🆘 Поддержка</button>
     <div class="note" style="text-align:center;opacity:.6;margin-bottom:8px">Azika Seller · версия 3</div>
     <div class="note">Твоя комиссия магазина ${me.fee}% (уровень «${esc(me.level.name)}», чем выше уровень — тем меньше). Минимальный вывод ${me.payout_min} ⭐. Выплата вручную через администратора.</div>`);
   $("#ava").onclick = () => { haptic(); openAvatar(me, nm, showMoney); };
   $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(me); };
   $("#po").onclick = () => payoutForm(me);
-  $("#adm").onclick = () => { haptic(); openAdminChat(); };
   $("#sup").onclick = () => { const u = "https://t.me/" + (S.support || "@azikashop_support_bot").replace(/^@/, "") + "?start=seller"; tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); };
   $("#rv").onclick = openReviews;
   if ($("#vreq")) $("#vreq").onclick = async () => { $("#vreq").disabled = true;
@@ -485,12 +483,12 @@ function openAvatar(p, name, done) {
     <input type="file" id="avF" accept="image/*" style="display:none">
     <button class="btn" id="avPick">📷 Выбрать фото</button>
     ${p.av_custom ? '<button class="btn ghost" id="avRst" style="margin-top:10px">↩️ Вернуть фото из Telegram</button>' : ""}
-    <div class="hint" style="text-align:center;margin-top:10px">Квадратное фото лучше всего. Если ничего не выбрано, показывается фото из Telegram.</div>`);
+    <div class="hint" style="text-align:center;margin-top:10px">Квадратное фото лучше всего. Это отдельное фото продавца: его видят покупатели, оно не меняет твоё фото покупателя. Если ничего не выбрано, показывается фото из Telegram.</div>`);
   $("#avPick").onclick = () => $("#avF").click();
   $("#avF").onchange = async () => { const f = $("#avF").files[0]; if (!f) return; $("#avPick").disabled = true;
-    try { const d = await cropImg(f); const r = await api("/api/avatar_set", { data: d }); if (!r.ok) { toast(r.msg || "Не получилось"); $("#avPick").disabled = false; return; }
+    try { const d = await cropImg(f); const r = await api("/api/avatar_set", { data: d, role: "seller" }); if (!r.ok) { toast(r.msg || "Не получилось"); $("#avPick").disabled = false; return; }
       closeSheet(); toast("Фото обновлено", true); done(); } catch (e) { toast(e.message || "Нет связи"); $("#avPick").disabled = false; } };
-  if ($("#avRst")) $("#avRst").onclick = async () => { try { await api("/api/avatar_reset", {}); closeSheet(); toast("Вернули фото из Telegram", true); done(); } catch (e) { toast("Нет связи"); } };
+  if ($("#avRst")) $("#avRst").onclick = async () => { try { await api("/api/avatar_reset", { role: "seller" }); closeSheet(); toast("Вернули фото из Telegram", true); done(); } catch (e) { toast("Нет связи"); } };
 }
 function sellerLevel(me) {
   const lv = me.level, lvs = lv.levels, cur = lv.level - 1, nx = lvs[cur + 1];
