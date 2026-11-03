@@ -386,6 +386,11 @@ def chats_list() -> list[dict]:
             i = seller_info(sid)
             if i:
                 out.append({"id": sid, "name": display_name(i), "av": i["av"], "last": t, "mine": bool(fa), "t": cr, "unread": unread or 0, "review": i["review"], "verified": i["verified"], **seen_of(sid)})
+        have = {c["id"] for c in out}
+        for (sid,) in c.execute("SELECT user_id FROM sellers WHERE COALESCE(review,0)=1").fetchall():   # на проверке — виден даже без переписки
+            i = seller_info(sid)
+            if i and sid not in have:
+                out.append({"id": sid, "name": display_name(i), "av": i["av"], "last": "", "mine": True, "t": 0, "unread": 0, "review": True, "verified": i["verified"], **seen_of(sid)})
     return out
 
 

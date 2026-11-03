@@ -41,7 +41,7 @@ input:focus,textarea:focus{border-color:var(--ac)}
 .tabs button{flex:1;background:none;padding:9px 0;font-size:11px;color:var(--mu);border-radius:20px;position:relative;z-index:1}
 .tabs button span{display:block;font-size:20px}
 .tabs button.on{color:#fff}
-.pillbg{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/4);background:var(--ac);border-radius:20px;transition:transform .3s cubic-bezier(.3,1.2,.5,1)}
+.pillbg{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/5);background:var(--ac);border-radius:20px;transition:transform .3s cubic-bezier(.3,1.2,.5,1)}
 .sheet-bg{position:fixed;inset:0;background:#0009;z-index:10;opacity:0;transition:.2s;pointer-events:none}
 .sheet-bg.on{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:11;background:var(--card);border-radius:26px 26px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-height:86vh;overflow:auto;transform:translateY(105%);transition:transform .3s cubic-bezier(.3,1,.4,1)}
@@ -94,7 +94,7 @@ button{transition:transform .12s,background .2s,opacity .2s}
 <h1><span class="mav" style="width:36px;height:36px;border-radius:12px">🛠</span> Azika <b>Admin</b></h1>
 <div id="v"></div>
 <nav class="tabs"><div class="pillbg" id="pb"></div>
-<button data-t="q"><span>📥</span>Заявки</button><button data-t="s"><span>👥</span>Продавцы</button><button data-t="p"><span>🎟</span>Промо</button><button data-t="m"><span>⚙️</span>Ещё</button></nav>
+<button data-t="q"><span>📥</span>Заявки</button><button data-t="s"><span>👥</span>Продавцы</button><button data-t="c"><span>💬</span>Чаты</button><button data-t="p"><span>🎟</span>Промо</button><button data-t="m"><span>⚙️</span>Ещё</button></nav>
 <div class="sheet-bg" id="sbg"></div><div class="sheet" id="sh"></div><div class="toast" id="ts"></div>
 <script>
 const tg = window.Telegram && Telegram.WebApp;
@@ -123,16 +123,16 @@ const ago = ts => { if (!ts) return ""; const m = Math.max(0, (Date.now() / 1000
 const V = html => { $("#v").innerHTML = html; };
 
 let tab = "q", counts = {}, sq = "", smode = "a";
-const TABS = ["q", "s", "p", "m"];
+const TABS = ["q", "s", "c", "p", "m"];
 function setTab(t) {
   const dir = TABS.indexOf(t) >= TABS.indexOf(tab) ? "l" : "r"; tab = t;
   const v = $("#v"); v.className = ""; void v.offsetWidth; v.className = dir; $("#pb").style.transform = `translateX(${TABS.indexOf(t) * 100}%)`;
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === t));
-  haptic(); ({ q: viewQueue, s: viewSellers, p: viewPromos, m: viewMore })[t]();
+  haptic(); ({ q: viewQueue, s: viewSellers, c: viewChatsTab, p: viewPromos, m: viewMore })[t]();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setTab(b.dataset.t));
 function badge() {
-  [["q", counts.total], ["s", counts.chat]].forEach(([t, n]) => {
+  [["q", counts.total], ["c", counts.chat]].forEach(([t, n]) => {
     const b = document.querySelector(`.tabs button[data-t="${t}"]`), o = b.querySelector(".badge"); o && o.remove();
     if (n) b.insertAdjacentHTML("beforeend", `<i class="badge">${n}</i>`);
   });
@@ -168,9 +168,8 @@ async function doDecide(kind, id, ok, reason) {
 /* ---------- Продавцы ---------- */
 let sTimer;
 function viewSellers() {
-  V(`<button class="pr" style="width:100%;margin-bottom:10px" id="chbtn">💬 Чаты с продавцами${counts.chat ? ` · ${counts.chat} нов.` : ""}</button><input id="sq" placeholder="Поиск: имя, @username или ID" value="${esc(sq)}">
+  V(`<input id="sq" placeholder="Поиск: имя, @username или ID" value="${esc(sq)}">
   <div class="seg" style="margin-top:10px">${[["a", "Все"], ["p", "Заявки"], ["v", "На галочку"]].map(([k, n]) => `<button data-m="${k}" class="${smode === k ? "on" : ""}">${n}</button>`).join("")}</div><div id="sl"></div>`);
-  $("#chbtn").onclick = viewChats;
   $("#sq").oninput = e => { sq = e.target.value; clearTimeout(sTimer); sTimer = setTimeout(loadSellers, 300); };
   document.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { smode = b.dataset.m; viewSellers(); });
   loadSellers();
@@ -217,10 +216,19 @@ function reviewSheet(s, on) {
 
 /* ---------- Чаты с продавцами ---------- */
 let chatTimer, chatId = 0;
-async function viewChats() {
-  const j = await api("chats"); if (!j.ok) return;
-  sheet(`<div class="t" style="font-size:17px;margin-bottom:10px">💬 Чаты с продавцами</div>` + (j.chats.length ? j.chats.map(c => `<div class="card" data-c="${c.id}" style="cursor:pointer;margin-bottom:8px"><div class="row">${av(c.av, c.name)}<div class="grow"><div class="t">${esc(c.name)}${c.review ? " 🔍" : ""}</div><div class="mu" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.mine ? "Вы: " : ""}${esc(c.last)}</div>${seenHtml(c.seen, c.online) ? `<div class="mu" style="font-size:11px;margin-top:2px">${seenHtml(c.seen, c.online)}</div>` : ""}</div>${c.unread ? `<i class="badge" style="position:static">${c.unread}</i>` : `<span class="mu">${ago(c.t)}</span>`}</div></div>`).join("") : `<div class="empty">Чатов пока нет.<br>Открой продавца и нажми «💬 Чат», чтобы написать первым.</div>`));
-  document.querySelectorAll("#sh [data-c]").forEach(c => c.onclick = () => openChat(+c.dataset.c));
+let cfilter = "all";
+async function viewChatsTab() {
+  V(`<div class="empty">Загрузка…</div>`);
+  const j = await api("chats"); if (tab !== "c") return; if (!j.ok) return V(`<div class="empty">${esc(j.msg || "Нет связи")}</div>`);
+  counts.chat = j.chats.reduce((x, c) => x + c.unread, 0); badge();
+  const F = { all: j.chats, rev: j.chats.filter(c => c.review), un: j.chats.filter(c => c.unread) }, list = F[cfilter] || j.chats;
+  V(`<div class="seg">${[["all", "Все", F.all.length], ["rev", "🔍 На проверке", F.rev.length], ["un", "Непрочитанные", F.un.length]].map(([k, n, c]) => `<button data-f="${k}" class="${cfilter === k ? "on" : ""}">${n}${c ? ` · ${c}` : ""}</button>`).join("")}</div>`
+    + (list.length ? list.map(c => `<div class="card" data-c="${c.id}" style="cursor:pointer"><div class="row">${av(c.av, c.name)}<div class="grow"><div class="t">${esc(c.name)}${c.verified ? " ✅" : ""}${c.review ? ` <span class="pill y">🔍 проверка</span>` : ""}</div><div class="mu" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.last ? (c.mine ? "Вы: " : "") + esc(c.last) : "Переписки пока нет"}</div>${seenHtml(c.seen, c.online) ? `<div class="mu" style="font-size:11px;margin-top:2px">${seenHtml(c.seen, c.online)}</div>` : ""}</div>${c.unread ? `<i class="badge" style="position:static">${c.unread}</i>` : `<span class="mu">${ago(c.t)}</span>`}</div></div>`).join("")
+      : `<div class="empty">${cfilter === "rev" ? "Сейчас никто не на проверке" : cfilter === "un" ? "Новых сообщений нет" : "Чатов пока нет"}<br><span style="font-size:13px">Вызови продавца на проверку или нажми «💬 Чат» в его карточке — он появится здесь.</span></div>`)
+    + `<button class="pr" style="width:100%;margin-top:4px" id="cnew">✏️ Написать продавцу</button>`);
+  document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { cfilter = b.dataset.f; haptic(); viewChatsTab(); });
+  document.querySelectorAll("[data-c]").forEach(c => c.onclick = () => openChat(+c.dataset.c));
+  $("#cnew").onclick = () => setTab("s");
 }
 async function loadChat(first) {
   const j = await api("chat", { id: chatId, quiet: true }); if (!j.ok || !$("#msgs")) return;
@@ -238,7 +246,7 @@ async function openChat(id) {
   <div id="rvb"></div><div id="msgs" style="margin-top:10px"></div>
   <div class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ct" rows="1" placeholder="Сообщение…" style="max-height:110px"></textarea><button class="pr" id="csend">➤</button></div>
   <div class="btns" style="margin-top:8px"><button class="f" id="crev">${s.review ? "✅ Завершить проверку" : "🔍 Вызвать на проверку"}</button></div>`);
-  $("#cback").onclick = () => { clearInterval(chatTimer); viewChats(); };
+  $("#cback").onclick = () => closeSheet();
   const send = async () => { const t = $("#ct").value.trim(); if (!t) return; $("#csend").disabled = true; const r = await api("chat_send", { id, text: t }); $("#csend").disabled = false; if (r.ok) { $("#ct").value = ""; haptic(); await loadChat(true); toast(r.msg); } };
   $("#csend").onclick = send;
   $("#ct").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
@@ -246,7 +254,7 @@ async function openChat(id) {
   await loadChat(true);
   chatTimer = setInterval(() => $("#msgs") && chatId === id ? loadChat(false) : clearInterval(chatTimer), 6000);
 }
-const _cs = closeSheet; closeSheet = function () { clearInterval(chatTimer); _cs(); };
+const _cs = closeSheet; closeSheet = function () { clearInterval(chatTimer); const was = chatId; chatId = 0; _cs(); if (was && tab === "c") viewChatsTab(); };
 $("#sbg").onclick = () => closeSheet();
 
 /* ---------- Промо ---------- */
