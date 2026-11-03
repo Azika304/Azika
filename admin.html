@@ -76,6 +76,17 @@ button{transition:transform .12s,background .2s,opacity .2s}
 .rv{background:#3a2c0b;border:1px solid #6b4e12;color:#fbbf24;border-radius:14px;padding:10px 12px;margin-top:12px;font-size:13px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .lbl{font-size:13px;color:var(--mu);margin:12px 0 6px}
+.ico{width:46px;height:46px;border-radius:15px;background:linear-gradient(135deg,#312e81,#4f46e5);display:grid;place-items:center;font-size:22px;flex:none}
+.ctl{position:relative;padding-left:18px;overflow:hidden}
+.ctl::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:#16a34a;transition:background .3s}
+.ctl.off::before{background:var(--no)}
+.tg{position:relative;display:grid;grid-template-columns:1fr 1fr;height:46px;background:var(--card2);border-radius:15px;padding:4px;margin-top:14px;cursor:pointer;user-select:none}
+.tg::before{content:"";position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);border-radius:12px;background:#16a34a;transition:transform .38s cubic-bezier(.3,1.35,.5,1),background .3s;box-shadow:0 4px 14px #0005}
+.tg.on::before{transform:translateX(100%);background:var(--no)}
+.tg span{position:relative;z-index:1;display:grid;place-items:center;font-weight:600;font-size:14px;color:var(--mu);transition:color .25s}
+.tg span.a{color:#fff}
+.tg:active::before{filter:brightness(1.15)}
+.ib{width:42px;height:42px;padding:0;border-radius:13px;flex:none;font-size:17px}
 .onl{color:#2ee6a6;font-weight:700}.onl::first-letter{animation:onl 1.6s infinite}@keyframes onl{50%{opacity:.35}}
 </style>
 </head>
@@ -126,6 +137,9 @@ function badge() {
     if (n) b.insertAdjacentHTML("beforeend", `<i class="badge">${n}</i>`);
   });
 }
+
+const tg2 = (on, a, b) => `<div class="tg ${on ? "on" : ""}"><span class="${on ? "" : "a"}">${a}</span><span class="${on ? "a" : ""}">${b}</span></div>`;
+function flip(el, card) { const on = !el.classList.contains("on"); el.classList.toggle("on", on); [...el.children].forEach((x, i) => x.classList.toggle("a", on ? i === 1 : i === 0)); if (card) card.classList.toggle("off", on); haptic("medium"); return on; }
 
 /* ---------- Заявки ---------- */
 async function viewQueue() {
@@ -243,12 +257,16 @@ async function viewPromos() {
 }
 function drawPromos(list) {
   const N = { shop: "🛍 Шоп", vpn: "🔐 VPN" };
-  V(`<button class="pr" style="width:100%;margin-bottom:12px" id="pnew">+ Создать промокод</button>` + (list.length ? list.map(p => `<div class="card"><div class="row"><div class="grow"><div class="t">${esc(p.code)} <span class="pill">−${p.pct}%</span> <span class="pill ${p.paused ? "y" : "g"}">${p.paused ? "пауза" : "активен"}</span></div><div class="mu">${N[p.scope]} · ${p.scope === "vpn" ? (p.left ? "осталось " + p.left : "без лимита") : "использован " + p.used + (p.max ? " из " + p.max : "")}</div></div></div><div style="text-align:center"><div class="sw ${p.paused ? "on" : ""}" data-pa="toggle:${p.scope}:${esc(p.code)}"></div><div class="swl ${p.paused ? "on" : ""}" style="margin-top:3px">${p.paused ? "стоп" : "работает"}</div></div></div><div class="btns"><button class="no f" data-pa="delete:${p.scope}:${esc(p.code)}">🗑 Удалить</button></div></div>`).join("") : `<div class="empty">Промокодов пока нет</div>`));
+  V(`<button class="pr" style="width:100%;margin-bottom:12px" id="pnew">+ Создать промокод</button>` + (list.length ? list.map(p => `<div class="card ctl ${p.paused ? "off" : ""}"><div class="row"><span class="ico">🎟</span><div class="grow"><div class="t" style="font-size:17px">${esc(p.code)} <span class="pill">−${p.pct}%</span></div><div class="mu">${N[p.scope]} · ${p.scope === "vpn" ? (p.left ? "осталось " + p.left : "без лимита") : "использован " + p.used + (p.max ? " из " + p.max : "")}</div></div><button class="no ib" data-pd="${p.scope}:${esc(p.code)}" aria-label="Удалить">🗑</button></div>
+    <div data-pt="${p.scope}:${esc(p.code)}">${tg2(p.paused, "▶ Работает", "⏸ Пауза")}</div></div>`).join("") : `<div class="empty">Промокодов пока нет</div>`));
   $("#pnew").onclick = newPromo;
-  document.querySelectorAll("[data-pa]").forEach(b => b.onclick = async () => {
-    const [act, scope, code] = b.dataset.pa.split(":");
-    if (act === "delete" && !confirm("Удалить " + code + "?")) return;
-    const j = await api("promo_act", { act, scope, code }); if (j.ok) { toast(j.msg); drawPromos(j.promos); }
+  document.querySelectorAll("[data-pt]").forEach(d => d.onclick = async () => {
+    const [scope, code] = d.dataset.pt.split(":"), t = d.firstChild; flip(t, d.closest(".card"));
+    const j = await api("promo_act", { act: "toggle", scope, code }); if (j.ok) { toast(j.msg); setTimeout(() => drawPromos(j.promos), 380); } else drawPromos((await api("promos")).promos || []);
+  });
+  document.querySelectorAll("[data-pd]").forEach(b => b.onclick = async () => {
+    const [scope, code] = b.dataset.pd.split(":"); if (!confirm("Удалить промокод " + code + "?")) return;
+    const j = await api("promo_act", { act: "delete", scope, code }); if (j.ok) { toast(j.msg); drawPromos(j.promos); }
   });
 }
 function newPromo() {
@@ -271,14 +289,16 @@ async function viewMore() {
   const j = await api("overview"); if (tab !== "m") return; if (!j.ok) return V(`<div class="empty">${esc(j.msg || "Нет связи")}</div>`);
   counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge();
   const s = j.stats.shop, v = j.stats.vpn, p = j.pause;
-  const sw = (k, n, st) => st === null ? "" : `<div class="row" style="padding:8px 0"><div class="grow"><div class="t">${n}</div><div class="mu">${st ? "продажи приостановлены" : "работает"}</div></div><div style="text-align:center"><div class="sw ${st ? "on" : ""}" data-sw="${k}:${st ? 0 : 1}"></div><div class="swl ${st ? "on" : ""}" style="margin-top:3px">${st ? "стоп" : "работает"}</div></div></div>`;
-  V(`<div class="sec">Продажи · влево — работает, вправо — стоп</div><div class="card">${sw("shop", "🛍 Azika Shop", p.shop)}${sw("vpn", "🔐 Azika VPN", p.vpn)}
-  <div class="lbl">Сообщение покупателям</div><textarea id="pm" rows="2" maxlength="200">${esc(p.msg)}</textarea><div class="btns"><button class="f" id="pmb">Сохранить текст</button><button class="no f" data-sw="all:1">Всё стоп</button><button class="ok f" data-sw="all:0">Всё вкл</button></div></div>
+  const sw = (k, ic, n, st) => st === null ? "" : `<div class="card ctl ${st ? "off" : ""}"><div class="row"><span class="ico">${ic}</span><div class="grow"><div class="t" style="font-size:17px">${n}</div><div class="mu">${st ? "Продажи приостановлены" : "Продажи идут"}</div></div></div><div data-sw="${k}">${tg2(st, "▶ Работает", "⏸ Стоп")}</div></div>`;
+  V(`<div class="sec">Продажи</div>${sw("shop", "🛍", "Azika Shop", p.shop)}${sw("vpn", "🔐", "Azika VPN", p.vpn)}
+  <div class="card"><div class="lbl" style="margin-top:0">Сообщение покупателям на время паузы</div><textarea id="pm" rows="2" maxlength="200">${esc(p.msg)}</textarea><button class="f" style="width:100%;margin-top:10px" id="pmb">Сохранить текст</button></div>
+  <div class="btns" style="margin-top:0;margin-bottom:12px"><button class="no f" data-sa="1">⏸ Остановить всё</button><button class="ok f" data-sa="0">▶ Запустить всё</button></div>
   ${s ? `<div class="sec">Шоп</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${s.users}</b></div><div><span class="mu">Сегодня</span><b>${s.today}</b><span class="mu">${s.today_stars}⭐</span></div><div><span class="mu">Всего оплат</span><b>${s.paid}</b><span class="mu">${s.paid_stars}⭐</span></div><div><span class="mu">Ждут выдачи</span><b>${s.wait}</b></div><div><span class="mu">Споры</span><b>${s.disputes}</b></div><div><span class="mu">Продавцов</span><b>${s.sellers}</b><span class="mu">блок ${s.sellers_banned}</span></div></div>` : ""}
   ${v ? `<div class="sec">VPN</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${v.users}</b></div><div><span class="mu">Активных</span><b>${v.active}</b></div><div><span class="mu">Оплат</span><b>${v.payments}</b></div><div><span class="mu">Сегодня</span><b>${v.payments_today}</b></div></div>` : ""}`);
-  document.querySelectorAll("[data-sw]").forEach(b => b.onclick = async () => {
-    const [which, on] = b.dataset.sw.split(":"), r = await api("pause", { which, on: on === "1" }); if (r.ok) { haptic("medium"); toast("Сохранено"); viewMore(); }
+  document.querySelectorAll("[data-sw]").forEach(d => d.onclick = async () => {
+    const t = d.firstChild, on = flip(t, d.closest(".card")), r = await api("pause", { which: d.dataset.sw, on }); if (r.ok) { toast(on ? "Продажи остановлены" : "Продажи запущены"); setTimeout(viewMore, 380); } else viewMore();
   });
+  document.querySelectorAll("[data-sa]").forEach(b => b.onclick = async () => { const r = await api("pause", { which: "all", on: b.dataset.sa === "1" }); if (r.ok) { haptic("medium"); toast("Сохранено"); viewMore(); } });
   $("#pmb").onclick = async () => { const r = await api("pause", { which: "all", text: $("#pm").value }); if (r.ok) toast("Текст сохранён"); };
 }
 
