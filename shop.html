@@ -334,6 +334,11 @@ textarea.f{resize:none;height:58px}
 .od{align-self:stretch;background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:6px}
 .od .odh{display:flex;justify-content:space-between;font-size:12px;font-weight:800;color:var(--muted)}.od .odh a{color:var(--text);cursor:pointer;text-decoration:underline}
 .od .odr{margin-top:8px;font-size:13px;font-weight:700;word-break:break-word}.od .odr i{display:block;font-style:normal;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:1px}
+.wbal{background:var(--grad);border-radius:20px;padding:18px;color:#fff;margin-bottom:14px;box-shadow:0 12px 26px rgba(192,38,211,.35)}
+.wbal small{opacity:.8;font-weight:700;font-size:12px}.wbal b{display:block;font:800 32px Manrope,sans-serif;margin-top:4px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.chips button{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:99px;padding:8px 14px;font:700 13px Manrope,sans-serif;cursor:pointer}
+.hrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.hrow .ic{width:38px;height:38px;border-radius:12px;background:var(--card);display:grid;place-items:center;font-size:18px;flex:none}
+.hrow .tx{flex:1;min-width:0}.hrow .tx b{display:block;font-size:14px}.hrow .tx span{font-size:12px;color:var(--muted)}.hrow .am{text-align:right;font:800 14px Manrope,sans-serif}.hrow .am.p{color:#34d399}.hrow .am i{display:block;font-style:normal;font-weight:600;font-size:11px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -635,6 +640,7 @@ $("#ov").onclick = e => { if (e.target.id === "ov") closeSheet(); };
 
 function openSheet(g, p) {
   state.game = g; state.pack = p; state.q = null; state.useBonus = true; state.promoMsg = null; state.promoNote = null;
+  if (p.offer) api("/api/offer_view", { pack: p.id }).catch(() => {});
   const saved = store("pid_" + g.kind) || "";
   sheetOpen(`
     <div class="sh-h">${packArt(g, p)}<div><h3>${esc(p.label)}</h3><p>${esc(g.name)} · ${p.stars} ⭐</p><p style="margin-top:6px">${sellerLine(p)}</p></div></div>
@@ -647,9 +653,10 @@ function openSheet(g, p) {
     ${p.gift ? "" : '<div class="row"><label>ПРОМОКОД</label><div id="promoBox"></div></div>'}
     <div id="bonusRow"></div>
     <div class="sum" id="sum"></div>
-    <button class="btn" id="payBtn">Оплатить Stars ⭐</button>`);
+    <button class="btn" id="payBtn">Оплатить Stars ⭐</button>
+    <button class="btn ghost" id="walBtn" style="display:none;margin-top:10px"></button>`);
   renderPromoBox(); renderSum(); requote(); bindSellers($("#sheet"));
-  $("#payBtn").onclick = pay;
+  $("#payBtn").onclick = () => pay(false); $("#walBtn").onclick = () => pay(true);
 }
 
 function renderPromoBox() {
@@ -710,18 +717,23 @@ function renderSum() {
   else rows += `<div class="cbn no">Кэшбэк до ${state.cbPct}% — при оплате от ${state.cbMin} ⭐</div>`;
   rows += `<div class="cbn no">⏱ Счёт действует ${state.ttl} мин, потом заказ отменяется</div>`;
   $("#sum").innerHTML = rows;
+  const wb = $("#walBtn"), wl = q ? (q.wallet || 0) : 0;
+  if (wb) { wb.style.display = ""; wb.disabled = false;
+    if (wl >= pay) { wb.innerHTML = `💼 Оплатить с баланса · ${wl} ⭐`; wb.onclick = () => pay(true); }
+    else { wb.innerHTML = `💼 Пополнить баланс (${wl} ⭐)`; wb.onclick = () => { closeSheet(); setTimeout(balanceScreen, 200); }; } }
 }
 
-async function pay() {
+async function pay(useWallet) {
   if (state.busy || !state.pack || !state.game) return;
   const player = $("#player").value.trim();
   if (!player) { toast("Введи ID игрока"); return; }
   state.busy = true; const btn = $("#payBtn"); btn.disabled = true; btn.innerHTML = '<span class="spn"></span>Создаю счёт…';
   try {
     const r = await api("/api/invoice", { pack: state.pack.id, player, comment: $("#comment").value.trim(),
-      promo: state.promo && !state.pack.gift && !(state.q && state.q.promo_scope) ? state.promo.code : "", use_bonus: state.useBonus });
+      promo: state.promo && !state.pack.gift && !(state.q && state.q.promo_scope) ? state.promo.code : "", use_bonus: state.useBonus, use_wallet: !!useWallet });
     if (!r.ok) { toast(r.msg || "Ошибка"); return; }
     store("pid_" + state.game.kind, player);
+    if (r.paid) { if (state.promo) { state.promo = null; store("promo", null); } closeSheet(); showSuccess(r.order); return; }
     if (!tg || !tg.openInvoice) { location.href = r.link; return; }
     tg.openInvoice(r.link, st => {
       if (st === "paid") { if (state.promo) { state.promo = null; store("promo", null); } closeSheet(); showSuccess(r.order); }
@@ -729,6 +741,37 @@ async function pay() {
     });
   } catch (e) { toast(e.message || "Нет связи с сервером"); }
   finally { state.busy = false; btn.disabled = false; btn.innerHTML = "Оплатить Stars ⭐"; }
+}
+
+
+/* ---------- Баланс (пополнение) ---------- */
+async function balanceScreen() {
+  let w = {wallet: 0, history: [], min: 50, max: 10000}, flt = "all";
+  try { const r = await api("/api/wallet", {}); if (r.ok) w = r; } catch (e) {}
+  const fmtD = ts => { const d = new Date(ts * 1000), M = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"]; return d.getDate() + " " + M[d.getMonth()] + ", " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  const rows = () => { const L = (w.history || []).filter(x => flt === "all" || (flt === "in" ? x.kind === "topup" : x.kind !== "topup"));
+    return L.length ? L.map(x => `<div class="hrow"><div class="ic">${x.kind === "topup" ? "➕" : x.kind === "refund" ? "↩️" : "🛒"}</div><div class="tx"><b>${esc(x.title || (x.kind === "topup" ? "Пополнение баланса" : "Покупка"))}</b><span>${fmtD(x.ts)}</span></div><div class="am ${x.stars > 0 ? "p" : ""}">${x.stars > 0 ? "+" : ""}${x.stars} ⭐<i>Успешно</i></div></div>`).join("") : '<div class="empty" style="padding:24px 0;text-align:center;color:var(--muted)">Операций пока нет</div>'; };
+  const draw = () => {
+    const m = document.querySelector("#cf .cfm"); m.style.overflowY = "auto"; m.style.display = "block"; m.style.padding = "8px 14px 40px";
+    m.innerHTML = `<div class="wbal"><small>Баланс для покупок</small><b>${w.wallet} ⭐</b></div>
+      <div class="row"><label>СУММА ПОПОЛНЕНИЯ, ⭐</label><input class="f" id="tpS" inputmode="numeric" placeholder="от ${w.min} до ${w.max}"></div>
+      <div class="chips">${[100, 250, 500, 1000].map(n => `<button data-n="${n}">${n}</button>`).join("")}</div>
+      <button class="btn" id="tpGo">Пополнить баланс</button>
+      <p style="margin:12px 0;font-size:12px;color:var(--muted)">Пополнение через Telegram Stars. Баланс можно потратить на любую покупку в магазине; при отмене заказа деньги возвращаются на баланс.</p>
+      <h4 style="margin:16px 0 8px">История</h4>
+      <div style="display:flex;gap:8px;margin-bottom:6px">${[["all","Все"],["in","Пополнения"],["buy","Покупки"]].map(([k,t]) => `<span class="chip ${flt === k ? "on" : ""}" data-f="${k}">${t}</span>`).join("")}</div>
+      <div>${rows()}</div>`;
+    m.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { flt = b.dataset.f; draw(); });
+    m.querySelectorAll(".chips button").forEach(b => b.onclick = () => { $("#tpS").value = b.dataset.n; try { haptic(); } catch (e) {} });
+    $("#tpGo").onclick = async () => {
+      const n = +$("#tpS").value.replace(/\D/g, ""); if (!n) { toast("Введи сумму"); return; }
+      try { const r = await api("/api/wallet/topup", {stars: n}); if (!r.ok) { toast(r.msg || "Ошибка"); return; }
+        if (!tg || !tg.openInvoice) { location.href = r.link; return; }
+        tg.openInvoice(r.link, async st => { if (st === "paid") { toast("Баланс пополнен", true); const q = await api("/api/wallet", {}); if (q.ok) w = q; draw(); } else if (st === "failed") toast("Оплата не прошла"); });
+      } catch (e) { toast("Нет связи"); }
+    };
+  };
+  fullOpen('<div><h3>Баланс</h3></div>', ""); draw();
 }
 
 function showSuccess(order) {
@@ -1022,6 +1065,7 @@ async function showProfile() {
         <div class="stat"><b data-n="${p.orders}">0</b><span>заказов</span></div>
         <div class="stat"><b data-n="${p.spent}">0</b><span>потрачено ⭐</span></div>
         <div class="stat g"><b data-n="${p.bonus}">0</b><span>баллов</span></div></div>
+      <div class="card up" style="--i:2"><h4>💼 Баланс</h4><p>На счету: <b>${p.wallet || 0} ⭐</b>. Пополняй через Stars и плати в один клик.</p><button class="btn" id="balOpen">Пополнить баланс</button></div>
       <div class="card up" style="--i:2"><h4>🎟 Промокод</h4><p>${state.promo ? "Активен: " + esc(state.promo.code) + " (−" + state.promo.pct + "%). Применится к следующему заказу." : "Есть промокод? Активируй — скидка применится при оплате."}</p>
         <button class="btn ghost" id="pcOpen">${state.promo ? "Изменить промокод" : "Ввести промокод"}</button></div>
       <div class="card ref up" style="--i:3"><h4>🎁 Приглашай друзей</h4>
@@ -1030,7 +1074,7 @@ async function showProfile() {
         <button class="sh" id="shr">Поделиться ссылкой</button>
         <div class="rs"><div><b data-n="${p.invited}">0</b><span>приглашено</span></div><div><b data-n="${p.buyers}">0</b><span>купили</span></div><div><b data-n="${p.earned}">0</b><span>заработано баллов</span></div></div></div>`);
     document.querySelectorAll("[data-n]").forEach(el => countUp(el, +el.dataset.n));
-    $("#pcOpen").onclick = openPromo;
+    $("#pcOpen").onclick = openPromo; $("#balOpen").onclick = () => { try { haptic(); } catch (e) {} balanceScreen(); };
     $("#ava").onclick = () => { haptic(); openAvatar(p, nm, showProfile); };
     $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(p); };
     renderSellerCard();

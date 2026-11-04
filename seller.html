@@ -151,6 +151,26 @@ input.f:focus,textarea.f:focus{border-color:var(--a1)}textarea.f{resize:none;hei
 .od{align-self:stretch;background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:6px}
 .od .odh{display:flex;justify-content:space-between;font-size:12px;font-weight:800;color:var(--muted)}.od .odh a{color:var(--text);cursor:pointer;text-decoration:underline}
 .od .odr{margin-top:8px;font-size:13px;font-weight:700;word-break:break-word}.od .odr i{display:block;font-style:normal;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:1px}
+.wal{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:13px 16px;margin-bottom:14px;cursor:pointer;transition:transform .15s}.wal:active{transform:scale(.98)}
+.wal .wi{width:46px;height:38px;border-radius:11px;background:var(--grad);display:grid;place-items:center;font-size:20px;flex:none}.wal b{font-size:22px;flex:1;font-weight:900}.wal small{display:block;font-size:11px;color:var(--muted);font-weight:700}.wal i{font-style:normal;color:var(--muted);font-size:26px}
+.pls{display:flex;gap:8px;overflow-x:auto;margin:0 0 10px;scrollbar-width:none;padding:2px 0}.pls::-webkit-scrollbar{display:none}
+.pls button{border:0;border-radius:99px;padding:13px 18px;font:800 15px Manrope,sans-serif;background:var(--card2);color:var(--text);cursor:pointer;white-space:nowrap;transition:transform .15s,background .25s}.pls button:active{transform:scale(.95)}
+.pls button.on{background:var(--grad);color:var(--onA);box-shadow:0 8px 20px rgba(20,184,166,.3)}.pls.sm button{padding:10px 18px;font-size:14px}
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.pc{cursor:pointer;animation:pcin .45s cubic-bezier(.2,.8,.3,1) both;transition:transform .15s}.pc:active{transform:scale(.97)}
+@keyframes pcin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.pc .pim{position:relative;aspect-ratio:4/3;border-radius:18px;overflow:hidden;background:var(--card2);display:grid;place-items:center;font-size:36px}.pc .pim img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.pc .pv{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.58);color:#fff;border-radius:12px;padding:3px 9px;font:800 13px Manrope,sans-serif;backdrop-filter:blur(4px)}
+.pc .pp{color:var(--a2);font-weight:900;font-size:19px;margin-top:9px}.pc .pt{font-weight:700;font-size:14px;line-height:1.35;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pc .ps{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;align-items:center}.pc .ps span{padding:5px 11px;border-radius:99px;font-size:12px;font-weight:800;background:var(--card2);color:var(--muted)}
+.pc .ps .ok{background:rgba(46,230,166,.14);color:var(--a2)}.pc .ps .bd{background:rgba(255,93,115,.14);color:var(--bad)}.pc .ps .wt{background:rgba(255,200,61,.14);color:var(--gold)}.pc .ps .ad{background:var(--grad);color:var(--onA)}
+.emp{text-align:center;padding:46px 10px 20px}.emp .e{font-size:78px}.emp h3{margin:12px 0 6px;font-size:24px;font-weight:900}.emp p{color:var(--muted);font-weight:600;margin:0 0 22px}
+.idl{display:flex;align-items:center;gap:6px;margin-top:4px;font-weight:800}.idl .st{color:var(--gold);letter-spacing:1px}.idl a{color:var(--a2);cursor:pointer}
+.wbal{background:var(--grad);border-radius:20px;padding:18px;color:#fff;margin-bottom:14px;box-shadow:0 12px 26px rgba(192,38,211,.35)}
+.wbal small{opacity:.8;font-weight:700;font-size:12px}.wbal b{display:block;font:800 32px Manrope,sans-serif;margin-top:4px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.chips button{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:99px;padding:8px 14px;font:700 13px Manrope,sans-serif;cursor:pointer}
+.hrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.hrow .ic{width:38px;height:38px;border-radius:12px;background:var(--card);display:grid;place-items:center;font-size:18px;flex:none}
+.hrow .tx{flex:1;min-width:0}.hrow .tx b{display:block;font-size:14px}.hrow .tx span{font-size:12px;color:var(--muted)}.hrow .am{text-align:right;font:800 14px Manrope,sans-serif}.hrow .am.p{color:#34d399}.hrow .am i{display:block;font-style:normal;font-weight:600;font-size:11px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -309,20 +329,52 @@ const OFS = { active: "в продаже", pending: "на проверке", hid
 async function showOffers() {
   view('<div class="sk"></div>');
   try { const r = await api("/api/seller/me", {}); if (!r.ok) throw 0; S.me = fixMe(r); S.fee = r.fee; } catch (e) { view('<div class="err">Нет связи</div>'); return; }
-  const o = S.me.offers, lim = S.me.level.limit, usedN = S.me.offers_used || 0;
-  view(`<div class="sect"><h3>Мои товары</h3><span>${o.length}</span></div><div class="note" style="margin:0 0 10px">Объявлений: <b>${usedN} из ${lim}</b> · уровень «${esc(S.me.level.name)}», комиссия ${S.me.fee}%. Поднимай уровень — лимит растёт, комиссия падает.</div><button class="btn" id="add" style="margin-top:0">➕ Выставить объявление</button><div style="height:14px"></div>`
-    + (o.length ? o.map(x => `<div class="card"><div class="of"><div class="im">📦<img src="${esc(API + "/api/img/" + x.id)}" alt="" onerror="this.remove()"></div>
-      <div class="tx">${esc(x.title)}<small>${esc((S.games.find(g => g.id === x.game) || {}).name || x.game)} · ${x.stars} ⭐ · продано ${x.sold}</small></div>
-      <span class="badge ${esc(x.status)}">${OFS[x.status] || esc(x.status)}</span></div>
-      ${x.ad ? `<div class="note">📢 Реклама включена — сейчас ты на <b>${x.rank || 1} месте</b> среди рекламы в своей игре. Если другой продавец купит рекламу позже, он станет первым, а ты сдвинешься ниже.</div>` : ""}
-      <div><button class="btn sm ghost" data-e="${esc(x.id)}">✏️ Изменить</button>${x.status === "active" ? `<button class="btn sm ghost" data-ad="${esc(x.id)}">📢 Реклама</button><button class="btn sm ghost" data-a="hide" data-id="${esc(x.id)}">🙈 Скрыть</button>` : ""}${x.status === "hidden" ? `<button class="btn sm ghost" data-a="show" data-id="${esc(x.id)}">👁 Показать</button>` : ""}<button class="btn sm bad" data-a="delete" data-id="${esc(x.id)}">Удалить</button></div></div>`).join("")
-      : '<div class="empty">Объявлений пока нет.<br>Выставь первое — после проверки оно появится в магазине.</div>'));
-  $("#add").onclick = () => { if (usedN >= lim) { toast(`Лимит ${lim} объявлений на уровне «${S.me.level.name}». Подними уровень в Профиле`); levelSheet(S.me); return; } offerForm(); };
-  document.querySelectorAll("[data-e]").forEach(b => b.onclick = () => offerForm(o.find(x => x.id === b.dataset.e)));
-  document.querySelectorAll("[data-ad]").forEach(b => b.onclick = () => adSheet(b.dataset.ad));
-  document.querySelectorAll("[data-a]").forEach(b => b.onclick = async () => {
+  const me = S.me, all = me.offers, lim = me.level.limit, usedN = me.offers_used || 0, u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user || {};
+  const nm = me.name || u.first_name || "Продавец", L = sellerLevel(me);
+  const act = all.filter(x => x.status === "active" || x.status === "pending"), done = all.filter(x => x.status === "hidden" || x.status === "rejected");
+  const tabK = S.ofTab || "act", list = tabK === "act" ? act : done;
+  const since = me.since ? (d => MONTHS[d.getMonth()] + " " + d.getFullYear())(new Date(me.since * 1000)) : "";
+  const chips = x => (x.status === "pending" ? '<span class="wt">на проверке</span>' : x.status === "rejected" ? '<span class="bd">отклонён</span>' : x.status === "hidden" ? '<span>скрыт</span>' : me.review ? '<span class="bd">скрыт: проверка</span>' : '<span class="ok">в продаже</span>') + (x.ad ? `<span class="ad">🚀 #${x.rank || 1}</span>` : "");
+  view(`<div class="wal" id="wal"><div class="wi">💰</div><div style="flex:1"><b>${me.balance} ⭐</b><small>доступно к выводу${me.escrow ? ` · в сделках ${me.escrow} ⭐` : ""}</small></div><i>›</i></div>
+    <div class="me"><div class="ava" id="ava">${esc(nm.slice(0, 1).toUpperCase())}${me.av ? `<img src="${esc(API + me.av)}" ${u.photo_url ? `data-f="${esc(u.photo_url)}"` : ""} alt="" onerror="if(this.dataset.f){this.src=this.dataset.f;this.removeAttribute('data-f')}else this.remove()">` : (u.photo_url ? `<img src="${esc(u.photo_url)}" alt="">` : "")}<span class="avedit">✎</span></div>
+      <div><h3>${esc(nm)} ${me.verified ? '<span class="ck">✓</span>' : ""}</h3>
+      <div class="idl">${me.reviews ? `<span class="st">★</span>${me.avg} <a id="rvl">${me.reviews} ${me.reviews === 1 ? "отзыв" : "отзывов"}</a>` : '<span style="color:var(--muted)">пока нет отзывов</span>'}</div>
+      <p>${since ? "в Azika с " + since : "новый продавец"}</p>
+      <div class="lvrow"><button class="lvl" id="lvl">⚡ ${esc(L.cur.name)} <small>· ${L.cur.fee}%</small> ›</button></div></div></div>
+    <div class="pls" style="margin-top:14px"><button class="on">Мои товары</button><button id="goOrd">Продажи</button><button id="goRev">Отзывы</button></div>
+    <div class="pls sm"><button data-k="act" class="${tabK === "act" ? "on" : ""}">Активные${act.length ? " · " + act.length : ""}</button><button data-k="done" class="${tabK === "done" ? "on" : ""}">Завершённые${done.length ? " · " + done.length : ""}</button></div>
+    <div class="note" style="margin:4px 0 0;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Объявлений: <b>${usedN} из ${lim}</b> · комиссия ${me.fee}%</span><button id="addB" style="border:0;border-radius:99px;padding:8px 14px;background:var(--grad);color:var(--onA);font:800 13px Manrope,sans-serif;cursor:pointer;white-space:nowrap">＋ Выставить</button></div>`
+    + (list.length ? `<div class="pg">${list.map((x, i) => `<div class="pc" data-o="${esc(x.id)}" style="animation-delay:${Math.min(i, 8) * 45}ms"><div class="pim">📦<img src="${esc(API + "/api/img/" + x.id)}" alt="" onerror="this.remove()"><span class="pv">👀 ${x.views || 0}</span></div><div class="pp">${x.stars} ⭐</div><div class="pt">${esc(x.title)}</div><div class="ps">${chips(x)}</div></div>`).join("")}</div>`
+      : `<div class="emp"><div class="e">${tabK === "act" ? "🙄" : "📭"}</div><h3>${tabK === "act" ? "Нет товаров" : "Здесь пока пусто"}</h3><p>${tabK === "act" ? "Пора выставить свой товар на продажу" : "Сюда попадают скрытые и отклонённые объявления"}</p>${tabK === "act" ? '<button class="btn" id="addE">Выставить товар</button>' : ""}</div>`));
+  const add = () => { if (usedN >= lim) { toast(`Лимит ${lim} объявлений на уровне «${me.level.name}». Подними уровень`); levelSheet(me); return; } haptic(); offerForm(); };
+  $("#addB").onclick = add; if ($("#addE")) $("#addE").onclick = add;
+  $("#wal").onclick = () => { haptic(); balanceScreen("out"); };
+  $("#ava").onclick = () => { haptic(); openAvatar(me, nm, showOffers); };
+  $("#lvl").onclick = () => { haptic(); levelSheet(me); };
+  if ($("#rvl")) $("#rvl").onclick = openReviews;
+  $("#goRev").onclick = () => { haptic(); openReviews(); };
+  $("#goOrd").onclick = () => { haptic(); S.dir = -3; S.tab = "orders"; go(); };
+  document.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { S.ofTab = b.dataset.k; haptic(); showOffers(); });
+  document.querySelectorAll("[data-o]").forEach(c => c.onclick = () => { haptic(); offerSheet(all.find(x => x.id === c.dataset.o)); });
+}
+function offerSheet(x) {
+  if (!x) return;
+  const g = (S.games.find(g => g.id === x.game) || {}).name || x.game;
+  sheetOpen(`<div class="pim" style="position:relative;aspect-ratio:16/10;border-radius:20px;overflow:hidden;background:var(--card2);display:grid;place-items:center;font-size:46px;margin-top:6px">📦<img src="${esc(API + "/api/img/" + x.id)}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.remove()"></div>
+    <div class="sh-h" style="margin-top:12px"><div><h3>${esc(x.title)}</h3><p>${esc(g)} · <b style="color:var(--a2)">${x.stars} ⭐</b></p></div></div>
+    <div class="kv" style="margin-bottom:10px"><div><b>👀 ${x.views || 0}</b><span>просмотров</span></div><div><b>${x.sold}</b><span>продано</span></div><div><b>${Math.floor(x.stars * (100 - S.fee) / 100)}</b><span>тебе ⭐</span></div></div>
+    <span class="badge ${esc(x.status)}">${OFS[x.status] || esc(x.status)}</span>
+    ${x.ad ? `<div class="note">📢 Реклама включена — сейчас ты на <b>${x.rank || 1} месте</b> среди рекламы в своей игре. Если другой продавец купит рекламу позже, он станет первым, а ты сдвинешься ниже.</div>` : ""}
+    ${x.desc ? `<div class="note" style="margin-top:10px">${esc(x.desc)}</div>` : ""}
+    <button class="btn" id="oEd">✏️ Изменить</button>
+    ${x.status === "active" ? `<div class="two"><button class="btn ghost" id="oAd">📢 Реклама</button><button class="btn ghost" data-a="hide">🙈 Скрыть</button></div>` : ""}
+    ${x.status === "hidden" ? `<button class="btn ghost" data-a="show">👁 Показать в магазине</button>` : ""}
+    <button class="btn bad" data-a="delete">Удалить</button>`);
+  $("#oEd").onclick = () => offerForm(x);
+  if ($("#oAd")) $("#oAd").onclick = () => adSheet(x.id);
+  document.querySelectorAll("#sheet [data-a]").forEach(b => b.onclick = async () => {
     if (b.dataset.a === "delete" && !confirm("Удалить товар?")) return;
-    try { const x = await api("/api/seller/offer_set", { id: b.dataset.id, action: b.dataset.a }); x.ok ? (haptic(), showOffers()) : toast(x.msg || "Ошибка"); } catch (e) { toast("Нет связи"); }
+    try { const r = await api("/api/seller/offer_set", { id: x.id, action: b.dataset.a }); r.ok ? (haptic(), closeSheet(), showOffers()) : toast(r.msg || "Ошибка"); } catch (e) { toast("Нет связи"); }
   });
 }
 function resizeImg(file, max = 900) {
@@ -495,7 +547,7 @@ async function showMoney() {
     <div class="note">Твоя комиссия магазина ${me.fee}% (уровень «${esc(me.level.name)}», чем выше уровень — тем меньше). Минимальный вывод ${me.payout_min} ⭐. Выплата вручную через администратора.</div>`);
   $("#ava").onclick = () => { haptic(); openAvatar(me, nm, showMoney); };
   $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(me); };
-  $("#po").onclick = () => payoutForm(me);
+  $("#po").onclick = () => balanceScreen("out");
   $("#sup").onclick = () => { const u = "https://t.me/" + (S.support || "@azikashop_support_bot").replace(/^@/, "") + "?start=seller"; tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); };
   $("#rv").onclick = openReviews;
   if ($("#vreq")) $("#vreq").onclick = async () => { $("#vreq").disabled = true;
@@ -583,6 +635,53 @@ function payoutForm(me) {
     try { const r = await api("/api/seller/payout", { stars: +$("#poS").value.replace(/\D/g, ""), details: $("#poD").value.trim() });
       if (!r.ok) { toast(r.msg || "Ошибка"); return; } closeSheet(); toast("Запрос отправлен админу", true); showMoney(); } catch (e) { toast("Нет связи"); }
   };
+}
+
+/* ---------- Баланс: пополнение / выплата ---------- */
+async function balanceScreen(tab) {
+  tab = tab || "out"; let w = {wallet: 0, history: [], min: 50, max: 10000}, po = [], me = S.me || {};
+  try { me = fixMe(await api("/api/seller/me", {})); S.me = me; } catch (e) {}
+  try { const r = await api("/api/wallet", {}); if (r.ok) w = r; } catch (e) {}
+  try { const r = await api("/api/seller/payouts", {}); if (r.ok) po = r.payouts || []; } catch (e) {}
+  let flt = "all";
+  const fmtD = ts => { const d = new Date(ts * 1000); return d.getDate() + " " + MONTHS[d.getMonth()] + ", " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  const rows = () => {
+    let L;
+    if (tab === "out") L = po.map(x => ({ic: "💸", t: "Выплата #" + x.id, s: fmtD(x.ts) + (x.details ? " · " + x.details : ""), a: -x.stars, st: x.status === "paid" ? "Выплачено" : x.status === "rejected" ? "Отклонено" : "В обработке"}));
+    else L = (w.history || []).filter(x => flt === "all" || (flt === "in" ? x.kind === "topup" : x.kind !== "topup")).map(x => ({ic: x.kind === "topup" ? "➕" : x.kind === "refund" ? "↩️" : "🛒", t: x.title || (x.kind === "topup" ? "Пополнение баланса" : "Покупка"), s: fmtD(x.ts), a: x.stars, st: "Успешно"}));
+    return L.length ? L.map(x => `<div class="hrow"><div class="ic">${x.ic}</div><div class="tx"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></div><div class="am ${x.a > 0 ? "p" : ""}">${x.a > 0 ? "+" : ""}${x.a} ⭐<i>${x.st}</i></div></div>`).join("") : '<div class="emp" style="padding:24px 0"><div class="e">🗂</div><p>Операций пока нет</p></div>';
+  };
+  const draw = () => {
+    const body = tab === "in"
+      ? `<div class="wbal"><small>Баланс для покупок</small><b>${w.wallet} ⭐</b></div>
+         <div class="row"><label>СУММА ПОПОЛНЕНИЯ, ⭐</label><input class="f" id="tpS" inputmode="numeric" placeholder="от ${w.min} до ${w.max}"></div>
+         <div class="chips">${[100, 250, 500, 1000].map(n => `<button data-n="${n}">${n}</button>`).join("")}</div>
+         <button class="btn" id="tpGo">Пополнить баланс</button>
+         <p class="note" style="margin:12px 0">Пополнение идёт через Telegram Stars. Баланс можно потратить на покупки в магазине. Вывести его нельзя — выводится только заработок продавца.</p>
+         <div class="pls sm" style="margin-top:6px"><button data-f="all" class="${flt === "all" ? "on" : ""}">Все</button><button data-f="in" class="${flt === "in" ? "on" : ""}">Пополнения</button><button data-f="buy" class="${flt === "buy" ? "on" : ""}">Покупки</button></div>`
+      : `<div class="wbal"><small>Доступно к выплате</small><b>${me.balance} ⭐</b></div>
+         <div class="row"><label>СУММА ВЫПЛАТЫ, ⭐</label><input class="f" id="poS" inputmode="numeric" value="${me.balance >= me.payout_min ? me.balance : ""}" placeholder="минимум ${me.payout_min}"></div>
+         <div class="row"><label>КУДА ВЫПЛАТИТЬ</label><textarea class="f" id="poD" maxlength="200" placeholder="Карта, кошелёк или @username"></textarea></div>
+         <button class="btn" id="poSend">Создать выплату</button>
+         <p class="note" style="margin:12px 0">Минимальная выплата ${me.payout_min} ⭐. Выплачивает админ вручную.</p>`;
+    { const m = $("#cf .cfm"); m.style.overflowY = "auto"; m.style.display = "block"; m.style.paddingBottom = "40px"; } $("#cf .cfm").innerHTML = `<div class="pls"><button data-t="in" class="${tab === "in" ? "on" : ""}">Пополнение</button><button data-t="out" class="${tab === "out" ? "on" : ""}">Выплата</button></div>${body}<h4 style="margin:16px 0 0">История</h4><div id="hist">${rows()}</div>`;
+    document.querySelectorAll("#cf [data-t]").forEach(b => b.onclick = () => { haptic(); tab = b.dataset.t; draw(); });
+    document.querySelectorAll("#cf [data-f]").forEach(b => b.onclick = () => { flt = b.dataset.f; draw(); });
+    document.querySelectorAll("#cf .chips button").forEach(b => b.onclick = () => { $("#tpS").value = b.dataset.n; haptic(); });
+    if ($("#tpGo")) $("#tpGo").onclick = async () => {
+      const n = +$("#tpS").value.replace(/\D/g, ""); if (!n) { toast("Введи сумму"); return; }
+      try { const r = await api("/api/wallet/topup", {stars: n}); if (!r.ok) { toast(r.msg || "Ошибка"); return; }
+        if (!tg || !tg.openInvoice) { location.href = r.link; return; }
+        tg.openInvoice(r.link, async st => { if (st === "paid") { toast("Баланс пополнен", true); const q = await api("/api/wallet", {}); if (q.ok) w = q; draw(); } else if (st === "failed") toast("Оплата не прошла"); });
+      } catch (e) { toast("Нет связи"); }
+    };
+    if ($("#poSend")) $("#poSend").onclick = async () => {
+      try { const r = await api("/api/seller/payout", { stars: +$("#poS").value.replace(/\D/g, ""), details: $("#poD").value.trim() });
+        if (!r.ok) { toast(r.msg || "Ошибка"); return; } toast("Выплата создана", true);
+        me = fixMe(await api("/api/seller/me", {})); S.me = me; const q = await api("/api/seller/payouts", {}); if (q.ok) po = q.payouts || []; draw(); } catch (e) { toast("Нет связи"); }
+    };
+  };
+  fullOpen('<div><h3>Баланс</h3></div>', ""); draw();
 }
 async function openReviews() {
   sheetOpen('<div class="sk" style="height:120px"></div>');

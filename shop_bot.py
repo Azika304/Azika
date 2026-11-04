@@ -259,7 +259,12 @@ def init_db():
         _addcol(c, "sellers", "review", "INTEGER DEFAULT 0")   # админ вызвал продавца на проверку: товары скрыты
         c.execute("CREATE TABLE IF NOT EXISTS admin_msgs(id INTEGER PRIMARY KEY AUTOINCREMENT, seller_id INTEGER, from_admin INTEGER, text TEXT, created INTEGER, read INTEGER DEFAULT 0)")
         c.execute("CREATE INDEX IF NOT EXISTS ix_adm_msg ON admin_msgs(seller_id)")
-        c.execute("CREATE TABLE IF NOT EXISTS seen(user_id INTEGER PRIMARY KEY, ts INTEGER)")   # когда человек последний раз был в приложении
+        c.execute("CREATE TABLE IF NOT EXISTS seen(user_id INTEGER PRIMARY KEY, ts INTEGER)")
+        _addcol(c, "users", "wallet", "INTEGER DEFAULT 0")   # внутренний баланс в ⭐ (пополняется Stars, тратится на заказы)
+        c.execute("CREATE TABLE IF NOT EXISTS wallet_tx(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, kind TEXT, stars INTEGER, title TEXT DEFAULT '', "
+                  "status TEXT DEFAULT 'done', ref TEXT DEFAULT '', created INTEGER)")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_wtx_user ON wallet_tx(user_id)")
+        c.execute("CREATE TABLE IF NOT EXISTS offer_views(offer_id INTEGER, user_id INTEGER, ts INTEGER, PRIMARY KEY(offer_id,user_id))")   # просмотры объявлений (уникальные люди)   # когда человек последний раз был в приложении
         c.commit()
 
 
@@ -656,6 +661,43 @@ def create_order(user_id: int, pack_id: str, player: str, comment: str, q: dict)
         return cur.lastrowid
 
 
+WALLET_MIN, WALLET_MAX = 50, 50000
+
+
+def wallet_of(uid: int) -> int:
+    with closing(db()) as c:
+        r = c.execute("SELECT COALESCE(wallet,0) FROM users WHERE user_id=?", (uid,)).fetchone()
+    return int(r[0]) if r else 0
+
+
+def wallet_log(uid: int, kind: str, stars: int, title: str, ref: str = "", status: str = "done") -> int:
+    with closing(db()) as c:
+        cur = c.execute("INSERT INTO wallet_tx(user_id,kind,stars,title,status,ref,created) VALUES(?,?,?,?,?,?,?)", (uid, kind, stars, title, status, ref, int(time.time())))
+        c.commit()
+        return cur.lastrowid
+
+
+def wallet_add(uid: int, stars: int, kind: str, title: str, ref: str = "") -> None:
+    with closing(db()) as c:
+        c.execute("UPDATE users SET wallet=COALESCE(wallet,0)+? WHERE user_id=?", (stars, uid))
+        c.commit()
+    wallet_log(uid, kind, stars, title, ref)
+
+
+def wallet_spend(uid: int, stars: int) -> bool:
+    """Атомарно списывает ⭐ с баланса; False, если не хватает."""
+    with closing(db()) as c:
+        cur = c.execute("UPDATE users SET wallet=wallet-? WHERE user_id=? AND COALESCE(wallet,0)>=?", (stars, uid, stars))
+        c.commit()
+        return cur.rowcount == 1
+
+
+def wallet_history(uid: int, limit: int = 80) -> list:
+    with closing(db()) as c:
+        rows = c.execute("SELECT id,kind,stars,title,status,created FROM wallet_tx WHERE user_id=? AND status='done' ORDER BY id DESC LIMIT ?", (uid, limit)).fetchall()
+    return [{"id": r[0], "kind": r[1], "stars": r[2], "title": r[3], "status": r[4], "ts": r[5]} for r in rows]
+
+
 def mark_paid(oid: int, charge_id: str) -> bool:
     with closing(db()) as c:
         cur = c.execute("UPDATE orders SET status='paid', charge_id=?, paid_at=? WHERE id=? AND status='new'",
@@ -744,7 +786,7 @@ def profile_data(uid: int) -> dict:
     return {"id": uid, "name": name, "username": username, "orders": done[0], "spent": done[1],
             "bonus": bonus, "earned": earned, "invited": invited, "buyers": buyers,
             "ref_percent": REF_PERCENT, "ref_link": link, "joined": fmt_time(joined), "cb": cb_level(uid),
-            "av": av_url(uid), "av_custom": os.path.exists(_av_custom(uid))}
+            "av": av_url(uid), "av_custom": os.path.exists(_av_custom(uid)), "wallet": wallet_of(uid)}
 
 
 # ==========================================
@@ -1423,6 +1465,15 @@ async def process_cancel(oid: int, actor: int) -> tuple[bool, str]:
     allowed = LIVE if is_admin(actor) else ("paid",)   # продавец отменяет только до передачи товара
     if o["status"] not in allowed:
         return False, "Заказ уже обработан"
+    if str(o["charge_id"] or "").startswith("wallet:"):   # заказ оплачен с внутреннего баланса — возвращаем туда же
+        if not set_status(oid, "refunded", LIVE):
+            return False, "Заказ уже обработан"
+        wallet_add(o["user_id"], o["stars"], "refund", f"Возврат: {o['game']} — {o['label']}", f"o{oid}")
+        release_refund(o)
+        await safe_send(o["user_id"], f"❌ <b>Заказ #{oid} отменён.</b>\n{o['stars']}⭐ вернулись на баланс магазина.\nВопросы — {escape(SUPPORT)}")
+        if o["seller_id"] and o["seller_id"] != actor:
+            await notify_seller(o["seller_id"], f"❌ Заказ #{oid} отменён поддержкой, деньги возвращены покупателю.")
+        return True, "Возвращено на баланс покупателя"
     try:
         await bot.refund_star_payment(user_id=o["user_id"], telegram_payment_charge_id=o["charge_id"])
     except Exception as e:
@@ -1741,6 +1792,12 @@ async def pre_checkout(query: PreCheckoutQuery):
     ok, err = False, "Заказ недоступен"
     try:
         kind, oid = query.invoice_payload.split(":")
+        if kind == "topup":
+            with closing(db()) as c:
+                t = c.execute("SELECT user_id,stars,status FROM wallet_tx WHERE id=? AND kind='topup'", (int(oid),)).fetchone()
+            ok = bool(t and t[2] == "pending" and t[0] == query.from_user.id and t[1] == query.total_amount and query.currency == "XTR")
+            await query.answer(ok=ok, error_message=None if ok else "Пополнение недоступно, создай его заново")
+            return
         o = get_order(int(oid)) if kind == "shop" else None
         if o and o["status"] == "new" and time.time() - o["created"] > ORDER_TTL_MIN * 60:
             err = f"Время на оплату ({ORDER_TTL_MIN} мин) истекло, создай заказ заново"
@@ -1763,9 +1820,27 @@ async def successful_payment(message: Message):
         oid = int(oid)
     except Exception:
         return
+    u = message.from_user
+    if kind == "topup":
+        ensure_user(u.id, u.first_name, u.username)
+        with closing(db()) as c:
+            cur = c.execute("UPDATE wallet_tx SET status='done', ref=? WHERE id=? AND kind='topup' AND status='pending' AND user_id=? AND stars=?",
+                            (pay.telegram_payment_charge_id, oid, u.id, pay.total_amount))
+            c.commit()
+        if cur.rowcount != 1:
+            try:
+                await bot.refund_star_payment(user_id=u.id, telegram_payment_charge_id=pay.telegram_payment_charge_id)
+            except Exception as e:
+                logging.warning("topup refund: %s", e)
+            await bot.send_message(ADMIN_ID, f"⚠️ Пополнение без записи #{oid} от {u.id}: {pay.total_amount}⭐ ({escape(pay.telegram_payment_charge_id)}). Пробую вернуть Stars.")
+            return
+        with closing(db()) as c:
+            c.execute("UPDATE users SET wallet=COALESCE(wallet,0)+? WHERE user_id=?", (pay.total_amount, u.id))
+            c.commit()
+        await message.answer(f"✅ <b>Баланс пополнен на {pay.total_amount} ⭐</b>\nСейчас на балансе: <b>{wallet_of(u.id)} ⭐</b>. Им можно оплачивать заказы в магазине.")
+        return
     if kind != "shop":
         return
-    u = message.from_user
     ensure_user(u.id, u.first_name, u.username)
     o = get_order(oid)
     if not o or not mark_paid(oid, pay.telegram_payment_charge_id):
@@ -1777,10 +1852,18 @@ async def successful_payment(message: Message):
         await bot.send_message(ADMIN_ID, f"⚠️ Платёж без активного заказа #{oid} от {u.id}: "
                                          f"{pay.total_amount}⭐ ({escape(pay.telegram_payment_charge_id)}). Пробую вернуть Stars.")
         return
+    await after_paid(oid)
+
+
+async def after_paid(oid: int):
+    """Уведомления после оплаты заказа (Stars или внутренний баланс)."""
     o = get_order(oid)
-    await message.answer(
-        f"✅ <b>Оплата получена!</b> Заказ #{oid}\n{escape(o['game'])} — {escape(o['label'])}\n"
-        f"Игрок: <code>{escape(o['player'])}</code>\n\nАдмин пополнит аккаунт в ближайшее время и пришлёт уведомление.")
+    try:
+        await bot.send_message(
+            o["user_id"], f"✅ <b>Оплата получена!</b> Заказ #{oid}\n{escape(o['game'])} — {escape(o['label'])}\n"
+            f"Игрок: <code>{escape(o['player'])}</code>\n\nАдмин пополнит аккаунт в ближайшее время и пришлёт уведомление.")
+    except Exception as e:
+        logging.info("after_paid buyer: %s", e)
     try:
         await bot.send_message(ADMIN_ID, "💰 <b>Новая оплата!</b>\n\n" + admin_order_text(o, user_info(o["user_id"])),
                                reply_markup=admin_kb(oid))
@@ -1950,7 +2033,7 @@ async def api_quote(request):
     if not pack_available(pack_id):
         return web.json_response({"ok": False, "msg": "Товар недоступен"})
     q = calc(user["id"], pack_id, str(data.get("promo", "")), bool(data.get("use_bonus", True)))
-    return web.json_response({"ok": True, **q})
+    return web.json_response({"ok": True, **q, "wallet": wallet_of(user["id"])})
 
 
 async def api_invoice(request):
@@ -1978,6 +2061,16 @@ async def api_invoice(request):
         return web.json_response({"ok": False, "msg": "Слишком много попыток, подожди пару минут"})
     oid = create_order(uid, pack_id, player, comment, q)
     o = get_order(oid)
+    if data.get("use_wallet"):   # оплата с внутреннего баланса без счёта Stars
+        if not wallet_spend(uid, o["stars"]):
+            set_status(oid, "expired", "new")
+            return web.json_response({"ok": False, "msg": f"На балансе не хватает ⭐ (нужно {o['stars']})", "wallet": wallet_of(uid)})
+        if not mark_paid(oid, f"wallet:{oid}"):
+            wallet_add(uid, o["stars"], "refund", f"Возврат за заказ #{oid}", f"o{oid}")
+            return web.json_response({"ok": False, "msg": "Заказ уже обработан"})
+        wallet_log(uid, "purchase", -o["stars"], f"{o['game']} — {o['label']}", f"o{oid}")
+        asyncio.create_task(after_paid(oid))
+        return web.json_response({"ok": True, "paid": True, "order": oid, "stars": o["stars"], "wallet": wallet_of(uid)})
     desc = f"Пополнение игрового аккаунта. Игрок: {player}. Счёт действует {ORDER_TTL_MIN} мин"
     if q["pct"]:
         desc += f" (промокод −{q['pct']}%)"
@@ -2499,6 +2592,57 @@ def admin_unread(uid: int) -> int:
         return c.execute("SELECT COUNT(*) FROM admin_msgs WHERE seller_id=? AND from_admin=1 AND read=0", (uid,)).fetchone()[0]
 
 
+async def api_offer_view(request):
+    """Покупатель открыл объявление продавца — считаем уникальный просмотр."""
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    o = offer_get(str(data.get("pack", "")))
+    if o and o["seller_id"] != user["id"]:
+        with closing(db()) as c:
+            c.execute("INSERT OR IGNORE INTO offer_views(offer_id,user_id,ts) VALUES(?,?,?)", (o["id"], user["id"], int(time.time())))
+            c.commit()
+    return web.json_response({"ok": True})
+
+
+async def api_wallet(request):
+    user, _ = await _auth(request)
+    if not user:
+        return _deny()
+    return web.json_response({"ok": True, "wallet": wallet_of(user["id"]), "history": wallet_history(user["id"]), "min": WALLET_MIN, "max": WALLET_MAX})
+
+
+async def api_wallet_topup(request):
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    try:
+        stars = int(data.get("stars"))
+    except (TypeError, ValueError):
+        return web.json_response({"ok": False, "msg": "Введи сумму"})
+    if not WALLET_MIN <= stars <= WALLET_MAX:
+        return web.json_response({"ok": False, "msg": f"Сумма пополнения от {WALLET_MIN} до {WALLET_MAX} ⭐"})
+    if not rate_ok(-user["id"] - 7, 8, 600):
+        return web.json_response({"ok": False, "msg": "Слишком часто, подожди немного"})
+    tid = wallet_log(user["id"], "topup", stars, "Пополнение баланса", status="pending")
+    try:
+        link = await bot.create_invoice_link(title="Пополнение баланса", description=f"Пополнение баланса {SHOP_NAME} на {stars} ⭐. Потом им можно оплачивать заказы.",
+                                             payload=f"topup:{tid}", provider_token="", currency="XTR", prices=[LabeledPrice(label="Пополнение", amount=stars)])
+    except Exception as e:
+        logging.warning("topup invoice: %s", e)
+        return web.json_response({"ok": False, "msg": "Не удалось создать счёт. Попробуй позже"})
+    return web.json_response({"ok": True, "link": link, "tx": tid})
+
+
+async def api_seller_payouts(request):
+    user, _ = await _auth(request)
+    if not user:
+        return _deny()
+    with closing(db()) as c:
+        rows = c.execute("SELECT id,stars,details,status,created FROM payouts WHERE seller_id=? ORDER BY id DESC LIMIT 60", (user["id"],)).fetchall()
+    return web.json_response({"ok": True, "payouts": [{"id": r[0], "stars": r[1], "details": r[2] or "", "status": r[3], "ts": r[4]} for r in rows]})
+
+
 async def api_seller_admin_chat(request):
     """Переписка продавца с администрацией (админ пишет первым через @azikaadmin_bot / мини-приложение)."""
     user, _ = await _auth(request)
@@ -2547,13 +2691,15 @@ def seller_payload(uid: int) -> dict:
         escrow = sum(r[0] * (100 - _fee) // 100 for r in c.execute(
             "SELECT stars FROM orders WHERE seller_id=? AND status IN ('paid','delivered','dispute')", (uid,)))
     avg, cnt = rating_of(uid)
-    return {"id": uid, "av": av_url(uid, True), "av_custom": os.path.exists(_av_custom(uid, True)), "status": sl["status"], "balance": sl["balance"], "earned": sl["earned"], "pending_payout": pend,
+    with closing(db()) as c:
+        views = dict(c.execute("SELECT offer_id,COUNT(*) FROM offer_views WHERE offer_id IN (SELECT id FROM offers WHERE seller_id=?) GROUP BY offer_id", (uid,)).fetchall())
+    return {"id": uid, "since": sl.get("created") or 0, "av": av_url(uid, True), "av_custom": os.path.exists(_av_custom(uid, True)), "status": sl["status"], "balance": sl["balance"], "earned": sl["earned"], "pending_payout": pend,
             "deals": deals, "avg": avg, "reviews": cnt, "fee": seller_fee(uid), "level": seller_level(uid), "offers_used": sum(1 for o in rows if o[6] in ("pending", "active", "hidden")), "payout_min": PAYOUT_MIN,
             "seller_bot": SELLER_BOT_USERNAME, "ad_price": AD_PRICE, "verified": bool(sl.get("verified")), "verify": verify_state(uid, sl),
-            "escrow": escrow, "auto_days": AUTO_CONFIRM_DAYS, "name": seller_name(uid),
+            "escrow": escrow, "auto_days": AUTO_CONFIRM_DAYS, "name": seller_name(uid), "wallet": wallet_of(uid),
             "unread": sum(c["unread"] for c in my_chats(uid)), "review": on_review(uid), "admin_unread": admin_unread(uid),
             "offers": [{"id": f"o{o[0]}", "game": o[2], "title": o[3], "desc": o[4], "stars": o[5], "status": o[6], "sold": o[8],
-                        "ad": (o[9] or 0) > time.time(), "rank": ad_rank(o[0], o[2])} for o in rows]}
+                        "ad": (o[9] or 0) > time.time(), "rank": ad_rank(o[0], o[2]), "views": views.get(o[0], 0)} for o in rows]}
 
 
 async def api_seller_me(request):
@@ -2813,6 +2959,10 @@ async def start_api():
     app.router.add_route("*", "/api/review", api_review)
     app.router.add_route("*", "/api/seller/me", api_seller_me)
     app.router.add_route("*", "/api/seller/verify_req", api_seller_verify_req)
+    app.router.add_route("*", "/api/offer_view", api_offer_view)
+    app.router.add_route("*", "/api/wallet", api_wallet)
+    app.router.add_route("*", "/api/wallet/topup", api_wallet_topup)
+    app.router.add_route("*", "/api/seller/payouts", api_seller_payouts)
     app.router.add_route("*", "/api/seller/admin_chat", api_seller_admin_chat)
     app.router.add_route("*", "/api/seller/admin_send", api_seller_admin_send)
     app.router.add_route("*", "/api/admin/{tail}", api_admin_proxy)
