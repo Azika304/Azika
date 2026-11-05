@@ -54,7 +54,7 @@ main{max-width:620px;margin:0 auto;padding:8px 16px}
 .of .im img{width:100%;height:100%;object-fit:cover}
 .of .tx{flex:1;min-width:0;font-weight:800}.of .tx small{display:block;color:var(--muted);font-weight:700;font-size:12px;margin-top:2px}
 .tabs{position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));max-width:596px;margin:0 auto;display:flex;background:var(--tabbg);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:26px;padding:6px;box-shadow:0 14px 38px rgba(0,0,0,.4);z-index:20}
-.tabs .ind{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px) / 5);border-radius:20px;background:var(--grad);box-shadow:0 8px 20px rgba(20,184,166,.5);transition:transform .38s cubic-bezier(.3,1.2,.4,1)}
+.tabs .ind{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px) / 4);border-radius:20px;background:var(--grad);box-shadow:0 8px 20px rgba(20,184,166,.5);transition:transform .38s cubic-bezier(.3,1.2,.4,1)}
 .tabs #tabs{position:relative;z-index:1;display:flex;width:100%}
 .tabs button{flex:1;position:relative;background:none;border:0;color:var(--muted);font:800 11px Manrope,sans-serif;padding:8px 0 7px;border-radius:20px;cursor:pointer;text-align:center;transition:color .25s}
 .tabs button svg{width:22px;height:22px;display:block;margin:0 auto 2px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .3s cubic-bezier(.3,1.6,.5,1)}
@@ -171,6 +171,7 @@ input.f:focus,textarea.f:focus{border-color:var(--a1)}textarea.f{resize:none;hei
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.chips button{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:99px;padding:8px 14px;font:700 13px Manrope,sans-serif;cursor:pointer}
 .hrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.hrow .ic{width:38px;height:38px;border-radius:12px;background:var(--card);display:grid;place-items:center;font-size:18px;flex:none}
 .hrow .tx{flex:1;min-width:0}.hrow .tx b{display:block;font-size:14px}.hrow .tx span{font-size:12px;color:var(--muted)}.hrow .am{text-align:right;font:800 14px Manrope,sans-serif}.hrow .am.p{color:#34d399}.hrow .am i{display:block;font-style:normal;font-weight:600;font-size:11px;color:var(--muted)}
+.bkp{border:0;background:var(--card);color:var(--text);border-radius:99px;padding:9px 16px;font:800 14px Manrope,sans-serif;margin:0 0 12px;cursor:pointer}.mnr{display:flex;align-items:center;gap:14px;padding:15px 4px;border-bottom:1px solid var(--line);cursor:pointer}.mnr .mi{width:38px;height:38px;border-radius:12px;background:var(--card2);display:grid;place-items:center;font-size:18px;flex:none}.mnr b{flex:1;font-size:15px}.mnr i{color:var(--muted);font-style:normal}.mnr.nsw{cursor:default}.ntgl{width:46px;height:28px;border-radius:99px;background:var(--line);position:relative;flex:none;cursor:pointer;transition:background .2s;border:0}.ntgl:after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s}.ntgl.on{background:var(--grad)}.ntgl.on:after{transform:translateX(18px)}
 </style>
 </head>
 <body>
@@ -196,7 +197,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&a
 const haptic = (t = "light") => { try { tg.HapticFeedback.impactOccurred(t); } catch (e) {} };
 const plural = (n, a, b, c) => { n = Math.abs(n) % 100; const m = n % 10; return n > 10 && n < 20 ? c : m > 1 && m < 5 ? b : m === 1 ? a : c; };
 const STAR = "⭐";
-let S = { tab: "orders", me: null, games: [], fee: 5, adPrice: 30, promoMax: 50, chatT: null };
+let S = { tab: "offers", me: null, games: [], fee: 5, adPrice: 30, promoMax: 50, chatT: null };
 
 /* ответ сервера может быть от старой версии — достраиваем уровень сами */
 const DEF_LV = [["Новичок", 0, 0, 0, 10, 3], ["Продавец", 5, 0, 0, 8, 10], ["Профи", 20, 5, 4.5, 6, 30], ["Топ-продавец", 50, 10, 4.7, 4, 100]]
@@ -228,7 +229,8 @@ async function api(path, body) {
   return r.json();
 }
 const view = h => {
-  const v = $("#view"); v.innerHTML = h; window.scrollTo(0, 0);
+  const v = $("#view"); v.innerHTML = (S.tab === "orders" ? '<button class="bkp" id="bkp">‹ Профиль</button>' : "") + h;
+  if (S.tab === "orders" && $("#bkp")) $("#bkp").onclick = () => { haptic(); S.dir = -1; S.tab = "money"; go(); }; window.scrollTo(0, 0);
   v.style.animation = "none"; void v.offsetWidth; v.style.animation = ""; S.dir = 0;
 };
 function fmtLeft(sec) { const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600); return d ? `${d} дн. ${h} ч` : h ? `${h} ч` : "менее часа"; }
@@ -264,14 +266,14 @@ const ICO = {
   money: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1"/>'
 };
 function drawTabs() {
-  const T = [["orders", "Заказы"], ["offers", "Товары"], ["promos", "Промо"], ["chats", "Чаты"], ["money", "Профиль"]];
+  const T = [["offers", "Товары"], ["promos", "Промо"], ["chats", "Чаты"], ["money", "Профиль"]], act = S.tab === "orders" ? "money" : S.tab;
   const un = S.me ? (S.me.unread || 0) + (S.me.admin_unread || 0) : 0;
-  $("#tabs").innerHTML = T.map(([k, l]) => `<button data-t="${k}" class="${S.tab === k ? "on" : ""}"><svg viewBox="0 0 24 24">${ICO[k]}</svg>${l}${k === "chats" && un ? `<i>${un}</i>` : ""}</button>`).join("");
-  $("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => { if (S.tab === b.dataset.t) return; haptic(); const T = ["orders", "offers", "promos", "chats", "money"]; S.dir = T.indexOf(b.dataset.t) - T.indexOf(S.tab); S.tab = b.dataset.t; go(); });
+  $("#tabs").innerHTML = T.map(([k, l]) => `<button data-t="${k}" class="${act === k ? "on" : ""}"><svg viewBox="0 0 24 24">${ICO[k]}</svg>${l}${k === "chats" && un ? `<i>${un}</i>` : ""}</button>`).join("");
+  $("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => { if (act === b.dataset.t && S.tab === act) return; haptic(); const T = ["offers", "promos", "chats", "money"]; S.dir = T.indexOf(b.dataset.t) - T.indexOf(act); S.tab = b.dataset.t; go(); });
 }
 setInterval(async () => { if (document.hidden || !S.me) return; try { const m = await api("/api/seller/me", {}); if (m.ok) { S.me.unread = m.unread || 0; S.me.admin_unread = m.admin_unread || 0; drawTabs(); } } catch (e) {} }, 25000);
 function go() { try { go0(); } catch (e) { view(`<div class="err">Ошибка: ${esc(e.message || e)}<br><button class="btn ghost" onclick="go()">Повторить</button></div>`); } }
-function go0() { drawTabs(); $("#ind").style.transform = `translateX(${["orders", "offers", "promos", "chats", "money"].indexOf(S.tab) * 100}%)`; ({ orders: showOrders, offers: showOffers, promos: showPromos, chats: showChats, money: showMoney })[S.tab](); }
+function go0() { drawTabs(); $("#ind").style.transform = `translateX(${["offers", "promos", "chats", "money"].indexOf(S.tab === "orders" ? "money" : S.tab) * 100}%)`; ({ orders: showOrders, offers: showOffers, promos: showPromos, chats: showChats, money: showMoney })[S.tab](); }
 
 /* старт */
 async function boot() {
@@ -353,7 +355,7 @@ async function showOffers() {
   $("#lvl").onclick = () => { haptic(); levelSheet(me); };
   if ($("#rvl")) $("#rvl").onclick = openReviews;
   $("#goRev").onclick = () => { haptic(); openReviews(); };
-  $("#goOrd").onclick = () => { haptic(); S.dir = -3; S.tab = "orders"; go(); };
+  $("#goOrd").onclick = () => { haptic(); S.dir = 3; S.tab = "orders"; go(); };
   document.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { S.ofTab = b.dataset.k; haptic(); showOffers(); });
   document.querySelectorAll("[data-o]").forEach(c => c.onclick = () => { haptic(); offerSheet(all.find(x => x.id === c.dataset.o)); });
 }
@@ -528,6 +530,25 @@ async function openChat(order, peer, label) {
 }
 
 /* ---------- Баланс ---------- */
+
+function menuSheet(me, nm) {
+  const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user || {};
+  sheetOpen(`<div class="sh-h"><div><h3>Меню</h3><p>${esc(nm)}${u.username ? " · @" + esc(u.username) : ""}</p></div></div>
+    <div class="mnr" data-m="ava"><div class="mi">📷</div><b>Изменить фото</b><i>›</i></div>
+    <div class="mnr nsw"><div class="mi">✈️</div><b>Вы вошли через Telegram<small style="display:block;font-weight:600;color:var(--muted);font-size:12px">ID ${me.id}</small></b></div>
+    <div class="mnr nsw"><div class="mi">🔔</div><b>Уведомления<small style="display:block;font-weight:600;color:var(--muted);font-size:12px">Новые сообщения из чатов</small></b><button class="ntgl ${me.notify !== false ? "on" : ""}" id="ntg" aria-label="Уведомления"></button></div>
+    <div class="mnr" data-m="bal"><div class="mi">💼</div><b>Баланс и выплаты</b><i>›</i></div>
+    <div class="mnr" data-m="rv"><div class="mi">⭐</div><b>Мои отзывы</b><i>›</i></div>
+    <div class="mnr" data-m="lvl"><div class="mi">⚡</div><b>Уровень и комиссия</b><i>${me.fee}% ›</i></div>
+    <div class="mnr" data-m="sup"><div class="mi">🆘</div><b>Написать в поддержку</b><i>›</i></div>
+    <div class="mnr" data-m="bot"><div class="mi">🤖</div><b>Открыть бота</b><i>›</i></div>`);
+  const open = u => tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank");
+  $("#ntg").onclick = async () => { const b = $("#ntg"), on = !b.classList.contains("on"); b.classList.toggle("on", on); haptic();
+    try { const r = await api("/api/notify_set", {on}); if (!r.ok) throw 0; me.notify = on; } catch (e) { b.classList.toggle("on", !on); toast("Нет связи"); } };
+  document.querySelectorAll("#sheet [data-m]").forEach(r => r.onclick = () => { haptic(); const k = r.dataset.m; closeSheet();
+    if (k === "ava") openAvatar(me, nm, showMoney); else if (k === "bal") balanceScreen("out"); else if (k === "rv") openReviews(); else if (k === "lvl") levelSheet(me);
+    else if (k === "sup") open("https://t.me/" + (S.support || "@azikashop_support_bot").replace(/^@/, "") + "?start=seller"); else open("https://t.me/azika_sellers_bot"); });
+}
 async function showMoney() {
   view('<div class="sk"></div>');
   let me; try { me = fixMe(await api("/api/seller/me", {})); if (!me.ok) throw 0; S.me = me; } catch (e) { view('<div class="err">Нет связи</div>'); return; }
@@ -536,9 +557,8 @@ async function showMoney() {
   view(`<div class="me"><div class="ava" id="ava">${esc(nm.slice(0, 1).toUpperCase())}${me.av ? `<img src="${esc(API + me.av)}" ${u.photo_url ? `data-f="${esc(u.photo_url)}"` : ""} alt="" onerror="if(this.dataset.f){this.src=this.dataset.f;this.removeAttribute('data-f')}else this.remove()">` : (u.photo_url ? `<img src="${esc(u.photo_url)}" alt="">` : "")}<span class="avedit">✎</span></div>
       <div><h3>${esc(nm)} ${me.verified ? '<span class="ck">✓</span>' : ""}</h3><p>${u.username ? "@" + esc(u.username) + " · " : ""}ID ${me.id}</p><div class="lvrow"><button class="lvl ${store("lvl_seen2") ? "" : "pulse"}" id="lvl">⚡ ${esc(L.cur.name)} <small>· ${L.cur.fee}%</small> ›</button>${store("lvl_seen2") ? "" : '<span class="tapme">👈 нажми</span>'}</div></div></div>
     ${me.review ? '<div class="note" style="margin:0 0 12px;background:rgba(255,200,61,.14);color:var(--gold);font-size:13px">🔍 <b>Твой аккаунт на проверке.</b> Товары временно скрыты из магазина, новые покупки закрыты. Уже оплаченные заказы выполняй как обычно. Напиши администрации во вкладке «Чаты».</div>' : ""}
-    <div class="card"><h4>Баланс</h4><div class="kv"><div class="g"><b>${me.balance}</b><span>доступно ⭐</span></div><div class="w"><b>${me.escrow || 0}</b><span>в сделках ⭐</span></div><div><b>${me.earned}</b><span>заработано ⭐</span></div></div>
-    <p>«В сделках» — деньги покупателей, которые держит магазин до подтверждения получения.${me.pending_payout ? `<br>На выводе: <b>${me.pending_payout} ⭐</b> (ждёт админа)` : ""}</p>
-    <button class="btn" id="po">💸 Вывести</button></div>
+    <div class="wal" id="wal2"><div class="wi">💰</div><div style="flex:1"><b>${me.balance} ⭐</b><small>доступно к выплате${me.escrow ? ` · в сделках ${me.escrow} ⭐` : ""}${me.pending_payout ? ` · на выводе ${me.pending_payout} ⭐` : ""}</small></div><i>›</i></div>
+    <div class="pls"><button id="pOff">Мои товары</button><button id="pOrd">Продажи</button><button id="pRev">Отзывы</button><button id="pMnu">☰ Меню</button></div>
     <div class="card"><h4>Мой профиль</h4><div class="kv"><div><b>${me.deals}</b><span>сделок</span></div><div><b>${me.reviews ? "★ " + me.avg : "—"}</b><span>рейтинг</span></div><div><b>${me.reviews}</b><span>отзывов</span></div></div>
       ${verifyBlock(me)}
       <button class="btn ghost" id="rv">⭐ Мои отзывы</button></div>
@@ -547,7 +567,10 @@ async function showMoney() {
     <div class="note">Твоя комиссия магазина ${me.fee}% (уровень «${esc(me.level.name)}», чем выше уровень — тем меньше). Минимальный вывод ${me.payout_min} ⭐. Выплата вручную через администратора.</div>`);
   $("#ava").onclick = () => { haptic(); openAvatar(me, nm, showMoney); };
   $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(me); };
-  $("#po").onclick = () => balanceScreen("out");
+  $("#wal2").onclick = () => { haptic(); balanceScreen("out"); };
+  $("#pOff").onclick = () => { haptic(); S.dir = -1; S.tab = "offers"; go(); };
+  $("#pOrd").onclick = () => { haptic(); S.dir = 1; S.tab = "orders"; go(); };
+  $("#pRev").onclick = openReviews; $("#pMnu").onclick = () => { haptic(); menuSheet(me, nm); };
   $("#sup").onclick = () => { const u = "https://t.me/" + (S.support || "@azikashop_support_bot").replace(/^@/, "") + "?start=seller"; tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); };
   $("#rv").onclick = openReviews;
   if ($("#vreq")) $("#vreq").onclick = async () => { $("#vreq").disabled = true;

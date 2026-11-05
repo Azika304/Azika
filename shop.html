@@ -123,15 +123,15 @@ body{min-height:100vh;overflow-x:hidden;padding:0 0 calc(96px + env(safe-area-in
 .cover h2{margin:0 0 3px;font:800 21px Unbounded,Manrope,sans-serif}
 .cover p{margin:0;font-size:12px;font-weight:600;opacity:.9}
 .sort{display:flex;gap:8px;margin-bottom:12px}
-.prow{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:10px 12px;margin-bottom:10px;cursor:pointer;box-shadow:var(--shadow);transition:transform .18s,border-color .18s}
-.prow:active{transform:scale(.975)}
-.prow .im{flex:none;width:64px;height:64px;border-radius:16px;display:grid;place-items:center;position:relative;overflow:hidden}
-.prow .im svg.pi{width:56px;height:56px;animation:float 3.6s ease-in-out infinite;animation-delay:calc(var(--i,0)*-.4s)}
-.prow .im img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.prow .mid{flex:1;min-width:0}
-.prow .lb{font-weight:800;font-size:15px}
-.prow .sb{font-size:12px;color:var(--muted);font-weight:600;margin-top:3px;display:flex;align-items:center;gap:5px}
-.prow .sb:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint)}
+.pbar{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:10px 12px;margin-bottom:10px;cursor:pointer;box-shadow:var(--shadow);transition:transform .18s,border-color .18s}
+.pbar:active{transform:scale(.975)}
+.pbar .im{flex:none;width:64px;height:64px;border-radius:16px;display:grid;place-items:center;position:relative;overflow:hidden}
+.pbar .im svg.pi{width:56px;height:56px;animation:float 3.6s ease-in-out infinite;animation-delay:calc(var(--i,0)*-.4s)}
+.pbar .im img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.pbar .mid{flex:1;min-width:0}
+.pbar .lb{font-weight:800;font-size:15px}
+.pbar .sb{font-size:12px;color:var(--muted);font-weight:600;margin-top:3px;display:flex;align-items:center;gap:5px}
+.pbar .sb:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint)}
 .price{flex:none;display:inline-flex;align-items:center;gap:5px;font-weight:800;font-size:14px;color:var(--onmint);padding:8px 12px;border-radius:13px;background:linear-gradient(135deg,var(--mint),#9af0cf)}
 .price svg{width:13px;height:13px;fill:#b07400}
 .hot .price{padding:6px 10px;font-size:13px}
@@ -261,7 +261,7 @@ textarea.f{resize:none;height:58px}
 .success h3{margin:14px 0 8px;font:800 20px Unbounded,Manrope,sans-serif}.success p{color:var(--muted);font-size:14px;line-height:1.55;margin:0 0 22px;font-weight:600}
 #confetti{position:fixed;inset:0;pointer-events:none;z-index:60}
 
-.prow .sb.sl:before{display:none}
+.pbar .sb.sl:before{display:none}
 .slr{display:inline-flex;align-items:center;gap:5px;font-weight:700;color:var(--muted);max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .slr b{color:var(--text);font-weight:800}.slr .ck{color:var(--mint)}.slr .st{color:var(--gold)}
 .slr.link{text-decoration:underline;text-decoration-color:rgba(169,159,214,.4);text-underline-offset:3px}
@@ -339,6 +339,7 @@ textarea.f{resize:none;height:58px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.chips button{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:99px;padding:8px 14px;font:700 13px Manrope,sans-serif;cursor:pointer}
 .hrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.hrow .ic{width:38px;height:38px;border-radius:12px;background:var(--card);display:grid;place-items:center;font-size:18px;flex:none}
 .hrow .tx{flex:1;min-width:0}.hrow .tx b{display:block;font-size:14px}.hrow .tx span{font-size:12px;color:var(--muted)}.hrow .am{text-align:right;font:800 14px Manrope,sans-serif}.hrow .am.p{color:#34d399}.hrow .am i{display:block;font-style:normal;font-weight:600;font-size:11px;color:var(--muted)}
+.bkp{border:0;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:99px;padding:9px 16px;font:800 14px Manrope,sans-serif;margin:0 0 12px;cursor:pointer}.wrow{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:13px 16px;margin-bottom:14px;cursor:pointer}.wrow .wi{width:46px;height:38px;border-radius:11px;background:var(--grad);display:grid;place-items:center;font-size:20px;flex:none}.wrow b{display:block;font-size:22px;font-weight:900}.wrow small{display:block;font-size:11px;color:var(--muted);font-weight:700}.wrow i{margin-left:auto;font-style:normal;color:var(--muted);font-size:22px}.pbar{display:flex;gap:8px;overflow-x:auto;margin:0 0 12px;scrollbar-width:none}.pbar::-webkit-scrollbar{display:none}.pbar button{flex:none;border:1px solid var(--line);border-radius:99px;padding:12px 18px;font:800 14px Manrope,sans-serif;background:var(--card);color:var(--text);cursor:pointer}.pbar button.on{background:var(--grad);border-color:transparent;color:#fff}.mnr{display:flex;align-items:center;gap:14px;padding:15px 4px;border-bottom:1px solid var(--line);cursor:pointer}.mnr .mi{width:38px;height:38px;border-radius:12px;background:var(--card);display:grid;place-items:center;font-size:18px;flex:none}.mnr b{flex:1;font-size:15px}.mnr i{color:var(--muted);font-style:normal}.fee{font-size:13px;color:var(--muted);margin:-4px 0 12px}.mnr.nsw{cursor:default}.ntgl{width:46px;height:28px;border-radius:99px;background:var(--line);position:relative;flex:none;cursor:pointer;transition:background .2s;border:0}.ntgl:after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s}.ntgl.on{background:var(--grad)}.ntgl.on:after{transform:translateX(18px)}
 </style>
 </head>
 <body>
@@ -357,7 +358,6 @@ textarea.f{resize:none;height:58px}
 <div class="tabs" id="tabs">
   <div class="ind" id="ind"></div>
   <div class="tab on" data-t="shop"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/></svg>Магазин</div>
-  <div class="tab" data-t="orders"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>Заказы</div>
   <div class="tab" data-t="chats"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z"/></svg>Чаты<i class="tb" id="tbChats" style="display:none"></i></div>
   <div class="tab" data-t="profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Профиль</div>
   <div class="tab" data-t="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 114 2c-.9.6-1.6 1.1-1.6 2.2M12 17h.01"/></svg>Помощь</div>
@@ -463,7 +463,9 @@ function packArt(g, p) {   // иконка товара: тёмная подло
 }
 
 /* ---------- Главная ---------- */
-function view(html) { const a = $("#app"); a.innerHTML = `<div class="view">${html}</div>`; return a; }
+function view(html) { const a = $("#app"); a.innerHTML = `<div class="view">${state.sub === "orders" ? '<button class="bkp" id="bkp">‹ Профиль</button>' : ""}${html}</div>`;
+  if (state.sub === "orders" && $("#bkp")) $("#bkp").onclick = () => { haptic(); state.sub = null; showProfile(); };
+  return a; }
 
 function bannerHtml() {
   const hasPromo = state.promo;
@@ -563,7 +565,7 @@ function sellerLine(p) {
   return `<span class="slr link" data-s="${sl.id}"><b>${esc(sl.name)}</b>${sl.shop || sl.verified ? '<span class="ck">✓</span>' : ""} ${rate(sl.avg, sl.count)}</span>`;
 }
 function prow(g, p, i, withGame) {
-  return `<div class="prow up" style="--i:${i}" data-g="${esc(g.id)}" data-p="${esc(p.id)}">${packArt(g, p)}
+  return `<div class="pbar up" style="--i:${i}" data-g="${esc(g.id)}" data-p="${esc(p.id)}">${packArt(g, p)}
     <div class="mid"><div class="lb">${esc(p.label)}${p.ad ? '<span class="ofb ad">реклама</span>' : p.offer ? '<span class="ofb">продавец</span>' : ""}</div><div class="sb sl">${withGame ? esc(g.name) + " · " : ""}${sellerLine(p)}</div></div>
     <span class="price">${STAR}${p.stars}</span></div>`;
 }
@@ -574,7 +576,7 @@ function bindSellers(root) {
 function bind() {
   bindSellers();
   document.querySelectorAll(".game").forEach(el => el.onclick = () => { haptic(); showGame(el.dataset.g); });
-  document.querySelectorAll(".hot,.prow").forEach(el => el.onclick = () => {
+  document.querySelectorAll(".hot,.pbar").forEach(el => el.onclick = () => {
     haptic(); const g = state.games.find(x => x.id === el.dataset.g); if (!g) return;
     if (!state.game) state.game = g;
     openSheet(g, g.packs.find(p => p.id === el.dataset.p));
@@ -607,7 +609,7 @@ function showGame(id) {
     <div class="cover up">${art(g, 150)}<div class="tx"><h2>${esc(g.name)}</h2><p>${g.packs.length} ${plural(g.packs.length, "товар", "товара", "товаров")} · от ${minPrice(g)} ⭐ · оплата Stars</p></div></div>
     <div class="sort">${[["pop", "Популярные"], ["cheap", "Дешевле"], ["exp", "Дороже"]].map(([k, v]) => `<div class="chip ${state.sort === k ? "on" : ""}" data-s="${k}">${v}</div>`).join("")}</div>
     ${list.map((p, i) => prow(g, p, i)).join("")}`);
-  document.querySelectorAll(".prow").forEach(el => el.onclick = () => { haptic(); openSheet(g, g.packs.find(p => p.id === el.dataset.p)); });
+  document.querySelectorAll(".pbar").forEach(el => el.onclick = () => { haptic(); openSheet(g, g.packs.find(p => p.id === el.dataset.p)); });
   bindSellers();
   document.querySelectorAll(".chip[data-s]").forEach(el => el.onclick = () => { state.sort = el.dataset.s; haptic(); showGame(id); });
 }
@@ -744,31 +746,49 @@ async function pay(useWallet) {
 }
 
 
-/* ---------- Баланс (пополнение) ---------- */
-async function balanceScreen() {
-  let w = {wallet: 0, history: [], min: 50, max: 10000}, flt = "all";
-  try { const r = await api("/api/wallet", {}); if (r.ok) w = r; } catch (e) {}
+/* ---------- Баланс: пополнение / выплата ---------- */
+async function balanceScreen(tab) {
+  tab = tab || "in"; let w = {wallet: 0, history: [], min: 50, max: 10000, out_fee: 1, out_min: 100}, po = [], flt = "all";
+  const load = async () => { try { const r = await api("/api/wallet", {}); if (r.ok) w = r; } catch (e) {} try { const r = await api("/api/wallet/payouts", {}); if (r.ok) po = r.payouts || []; } catch (e) {} };
+  await load();
   const fmtD = ts => { const d = new Date(ts * 1000), M = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"]; return d.getDate() + " " + M[d.getMonth()] + ", " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
-  const rows = () => { const L = (w.history || []).filter(x => flt === "all" || (flt === "in" ? x.kind === "topup" : x.kind !== "topup"));
-    return L.length ? L.map(x => `<div class="hrow"><div class="ic">${x.kind === "topup" ? "➕" : x.kind === "refund" ? "↩️" : "🛒"}</div><div class="tx"><b>${esc(x.title || (x.kind === "topup" ? "Пополнение баланса" : "Покупка"))}</b><span>${fmtD(x.ts)}</span></div><div class="am ${x.stars > 0 ? "p" : ""}">${x.stars > 0 ? "+" : ""}${x.stars} ⭐<i>Успешно</i></div></div>`).join("") : '<div class="empty" style="padding:24px 0;text-align:center;color:var(--muted)">Операций пока нет</div>'; };
+  const feeOf = n => Math.max(1, Math.ceil(n * w.out_fee / 100));
+  const rows = () => { let L;
+    if (tab === "out") L = po.map(x => ({ic: "💸", t: "Выплата #" + x.id, s: fmtD(x.ts), a: -x.stars, st: x.status === "paid" ? "Выплачено" : x.status === "rejected" ? "Отклонено" : "В обработке"}));
+    else L = (w.history || []).filter(x => flt === "all" || (flt === "in" ? x.kind === "topup" : x.kind !== "topup")).map(x => ({ic: x.kind === "topup" ? "➕" : x.kind === "refund" ? "↩️" : x.kind === "withdraw" ? "💸" : "🛒", t: x.title || "Операция", s: fmtD(x.ts), a: x.stars, st: "Успешно"}));
+    return L.length ? L.map(x => `<div class="hrow"><div class="ic">${x.ic}</div><div class="tx"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></div><div class="am ${x.a > 0 ? "p" : ""}">${x.a > 0 ? "+" : ""}${x.a} ⭐<i>${x.st}</i></div></div>`).join("") : '<div style="padding:24px 0;text-align:center;color:var(--muted)">Операций пока нет</div>'; };
   const draw = () => {
     const m = document.querySelector("#cf .cfm"); m.style.overflowY = "auto"; m.style.display = "block"; m.style.padding = "8px 14px 40px";
-    m.innerHTML = `<div class="wbal"><small>Баланс для покупок</small><b>${w.wallet} ⭐</b></div>
-      <div class="row"><label>СУММА ПОПОЛНЕНИЯ, ⭐</label><input class="f" id="tpS" inputmode="numeric" placeholder="от ${w.min} до ${w.max}"></div>
-      <div class="chips">${[100, 250, 500, 1000].map(n => `<button data-n="${n}">${n}</button>`).join("")}</div>
-      <button class="btn" id="tpGo">Пополнить баланс</button>
-      <p style="margin:12px 0;font-size:12px;color:var(--muted)">Пополнение через Telegram Stars. Баланс можно потратить на любую покупку в магазине; при отмене заказа деньги возвращаются на баланс.</p>
-      <h4 style="margin:16px 0 8px">История</h4>
-      <div style="display:flex;gap:8px;margin-bottom:6px">${[["all","Все"],["in","Пополнения"],["buy","Покупки"]].map(([k,t]) => `<span class="chip ${flt === k ? "on" : ""}" data-f="${k}">${t}</span>`).join("")}</div>
-      <div>${rows()}</div>`;
+    const tabs = `<div class="pbar"><button data-t="in" class="${tab === "in" ? "on" : ""}">Пополнение</button><button data-t="out" class="${tab === "out" ? "on" : ""}">Выплата</button></div>`;
+    const body = tab === "in"
+      ? `<div class="wbal"><small>Баланс для покупок</small><b>${w.wallet} ⭐</b></div>
+        <div class="row"><label>СУММА ПОПОЛНЕНИЯ, ⭐</label><input class="f" id="tpS" inputmode="numeric" placeholder="от ${w.min} до ${w.max}"></div>
+        <div class="chips">${[100, 250, 500, 1000].map(n => `<button data-n="${n}">${n}</button>`).join("")}</div>
+        <button class="btn" id="tpGo">Пополнить баланс</button>
+        <p style="margin:12px 0;font-size:12px;color:var(--muted)">Пополнение через Telegram Stars. Баланс можно потратить на любую покупку в магазине; при отмене заказа деньги возвращаются на баланс.</p>
+        <div class="pbar" style="margin-top:6px">${[["all","Все"],["in","Пополнения"],["buy","Покупки"]].map(([k,t]) => `<button class="${flt === k ? "on" : ""}" data-f="${k}">${t}</button>`).join("")}</div>`
+      : `<div class="wbal"><small>Доступно к выплате</small><b>${w.wallet} ⭐</b></div>
+        <div class="row"><label>СУММА ВЫПЛАТЫ, ⭐</label><input class="f" id="poS" inputmode="numeric" value="${w.wallet >= w.out_min ? w.wallet : ""}" placeholder="минимум ${w.out_min}"></div>
+        <div class="fee" id="feeL"></div>
+        <div class="row"><label>КУДА ВЫПЛАТИТЬ</label><textarea class="f" id="poD" maxlength="200" placeholder="Карта, кошелёк или @username"></textarea></div>
+        <button class="btn" id="poSend">Создать выплату</button>
+        <p style="margin:12px 0;font-size:12px;color:var(--muted)">Комиссия за вывод ${w.out_fee}%. Минимальная выплата ${w.out_min} ⭐. Выплачивает админ вручную.</p>`;
+    m.innerHTML = tabs + body + `<h4 style="margin:16px 0 4px">История</h4><div>${rows()}</div>`;
+    m.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { haptic(); tab = b.dataset.t; draw(); });
     m.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { flt = b.dataset.f; draw(); });
-    m.querySelectorAll(".chips button").forEach(b => b.onclick = () => { $("#tpS").value = b.dataset.n; try { haptic(); } catch (e) {} });
-    $("#tpGo").onclick = async () => {
+    m.querySelectorAll(".chips button").forEach(b => b.onclick = () => { $("#tpS").value = b.dataset.n; haptic(); });
+    const upd = () => { const n = +($("#poS").value.replace(/\D/g, "")) || 0; $("#feeL").textContent = n ? `Комиссия ${feeOf(n)} ⭐ · вы получите ${n - feeOf(n)} ⭐` : ""; };
+    if ($("#poS")) { $("#poS").oninput = upd; upd(); }
+    if ($("#tpGo")) $("#tpGo").onclick = async () => {
       const n = +$("#tpS").value.replace(/\D/g, ""); if (!n) { toast("Введи сумму"); return; }
       try { const r = await api("/api/wallet/topup", {stars: n}); if (!r.ok) { toast(r.msg || "Ошибка"); return; }
         if (!tg || !tg.openInvoice) { location.href = r.link; return; }
-        tg.openInvoice(r.link, async st => { if (st === "paid") { toast("Баланс пополнен", true); const q = await api("/api/wallet", {}); if (q.ok) w = q; draw(); } else if (st === "failed") toast("Оплата не прошла"); });
+        tg.openInvoice(r.link, async st => { if (st === "paid") { toast("Баланс пополнен", true); await load(); draw(); } else if (st === "failed") toast("Оплата не прошла"); });
       } catch (e) { toast("Нет связи"); }
+    };
+    if ($("#poSend")) $("#poSend").onclick = async () => {
+      try { const r = await api("/api/wallet/withdraw", {stars: +$("#poS").value.replace(/\D/g, ""), details: $("#poD").value.trim()});
+        if (!r.ok) { toast(r.msg || "Ошибка"); return; } toast(`Выплата создана: ${r.net} ⭐ после комиссии`, true); await load(); draw(); } catch (e) { toast("Нет связи"); }
     };
   };
   fullOpen('<div><h3>Баланс</h3></div>', ""); draw();
@@ -1050,7 +1070,7 @@ function openAvatar(p, name, done) {
 const level = n => n >= 15 ? "Легенда" : n >= 5 ? "Про" : n >= 1 ? "Игрок" : "Новичок";
 
 async function showProfile() {
-  state.game = null; setBack(false);
+  state.sub = null; state.game = null; setBack(false);
   view('<div class="sk"></div>');
   try {
     const p = await api("/api/profile", {});
@@ -1059,13 +1079,14 @@ async function showProfile() {
     const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user || {};
     const nm = p.name || u.first_name || "Игрок";
     view(`
+      <div class="wrow up" id="wal2"><div class="wi">💰</div><div><b>${p.wallet || 0} ⭐</b><small>баланс · пополнить или вывести</small></div><i>›</i></div>
       <div class="me up"><div class="ava" id="ava">${esc(nm.slice(0, 1).toUpperCase())}${p.av ? `<img src="${esc(API + p.av)}" ${u.photo_url ? `data-f="${esc(u.photo_url)}"` : ""} alt="" onerror="if(this.dataset.f){this.src=this.dataset.f;this.removeAttribute('data-f')}else this.remove()">` : (u.photo_url ? `<img src="${esc(u.photo_url)}" alt="">` : "")}<span class="avedit">✎</span></div>
         <div><h3>${esc(nm)}</h3><p>${p.username ? "@" + esc(p.username) + " · " : ""}ID ${p.id}</p><div class="lvrow"><button class="lvl ${store("lvl_seen2") ? "" : "pulse"}" id="lvl">⚡ ${CBN[cbOf(p).level - 1]} <small>· кэшбэк ${cbOf(p).pct}%</small> ›</button>${store("lvl_seen2") ? "" : '<span class="tapme">👈 нажми</span>'}</div></div></div>
+      <div class="pbar up" style="--i:1"><button class="on" id="pBuy">Покупки</button><button id="pSell">Продажи</button><button id="pMnu">☰ Меню</button></div>
       <div class="stats up" style="--i:1">
         <div class="stat"><b data-n="${p.orders}">0</b><span>заказов</span></div>
         <div class="stat"><b data-n="${p.spent}">0</b><span>потрачено ⭐</span></div>
         <div class="stat g"><b data-n="${p.bonus}">0</b><span>баллов</span></div></div>
-      <div class="card up" style="--i:2"><h4>💼 Баланс</h4><p>На счету: <b>${p.wallet || 0} ⭐</b>. Пополняй через Stars и плати в один клик.</p><button class="btn" id="balOpen">Пополнить баланс</button></div>
       <div class="card up" style="--i:2"><h4>🎟 Промокод</h4><p>${state.promo ? "Активен: " + esc(state.promo.code) + " (−" + state.promo.pct + "%). Применится к следующему заказу." : "Есть промокод? Активируй — скидка применится при оплате."}</p>
         <button class="btn ghost" id="pcOpen">${state.promo ? "Изменить промокод" : "Ввести промокод"}</button></div>
       <div class="card ref up" style="--i:3"><h4>🎁 Приглашай друзей</h4>
@@ -1074,7 +1095,13 @@ async function showProfile() {
         <button class="sh" id="shr">Поделиться ссылкой</button>
         <div class="rs"><div><b data-n="${p.invited}">0</b><span>приглашено</span></div><div><b data-n="${p.buyers}">0</b><span>купили</span></div><div><b data-n="${p.earned}">0</b><span>заработано баллов</span></div></div></div>`);
     document.querySelectorAll("[data-n]").forEach(el => countUp(el, +el.dataset.n));
-    $("#pcOpen").onclick = openPromo; $("#balOpen").onclick = () => { try { haptic(); } catch (e) {} balanceScreen(); };
+    $("#pcOpen").onclick = openPromo; $("#wal2").onclick = () => { haptic(); balanceScreen("in"); };
+    $("#pBuy").onclick = () => { haptic(); state.sub = "orders"; showOrders(); };
+    $("#pSell").onclick = () => { haptic(); const s = state.seller;
+      if (s && s.status === "approved") { const u = "https://t.me/" + (s.seller_bot || "azika_sellers_bot"); tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); }
+      else if (s && s.status === "pending") toast("Заявка на рассмотрении, бот пришлёт ответ");
+      else sheetOpen(`<div style="text-align:center;padding:10px 0 4px"><div style="font-size:54px">🙄</div><h3 style="margin:8px 0 4px">Нет товаров</h3><p style="color:var(--muted);margin:0 0 16px">Пора выставить свой товар на продажу</p><button class="btn" id="apGo">Подать заявку для селлера</button></div>`), $("#apGo").onclick = () => { closeSheet(); openApply(); }; };
+    $("#pMnu").onclick = () => { haptic(); menuSheet(p, nm); };
     $("#ava").onclick = () => { haptic(); openAvatar(p, nm, showProfile); };
     $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(p); };
     renderSellerCard();
@@ -1090,6 +1117,24 @@ async function showProfile() {
       tg && tg.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank");
     };
   } catch (e) { view(`<div class="err">${esc(e.message || "Нет связи")}<br><button onclick="showProfile()">Повторить</button></div>`); }
+}
+
+
+function menuSheet(p, nm) {
+  sheetOpen(`<div class="sh-h"><div><h3>Меню</h3><p>${esc(nm)}${p.username ? " · @" + esc(p.username) : ""}</p></div></div>
+    <div class="mnr" data-m="ava"><div class="mi">📷</div><b>Изменить фото</b><i>›</i></div>
+    <div class="mnr nsw"><div class="mi">✈️</div><b>Вы вошли через Telegram<small style="display:block;font-weight:600;color:var(--muted);font-size:12px">ID ${p.id}</small></b></div>
+    <div class="mnr nsw"><div class="mi">🔔</div><b>Уведомления<small style="display:block;font-weight:600;color:var(--muted);font-size:12px">Новые сообщения из чатов</small></b><button class="ntgl ${p.notify !== false ? "on" : ""}" id="ntg" aria-label="Уведомления"></button></div>
+    <div class="mnr" data-m="bal"><div class="mi">💼</div><b>Баланс и вывод</b><i>›</i></div>
+    <div class="mnr" data-m="ord"><div class="mi">📦</div><b>Мои покупки</b><i>›</i></div>
+    <div class="mnr" data-m="promo"><div class="mi">🎟</div><b>Промокод</b><i>›</i></div>
+    <div class="mnr" data-m="help"><div class="mi">🆘</div><b>Написать в поддержку</b><i>›</i></div>
+    <div class="mnr" data-m="sell"><div class="mi">💼</div><b>Подать заявку для селлера</b><i>›</i></div>`);
+  $("#ntg").onclick = async () => { const b = $("#ntg"), on = !b.classList.contains("on"); b.classList.toggle("on", on); haptic();
+    try { const r = await api("/api/notify_set", {on}); if (!r.ok) throw 0; p.notify = on; } catch (e) { b.classList.toggle("on", !on); toast("Нет связи"); } };
+  document.querySelectorAll("#sheet [data-m]").forEach(r => r.onclick = () => { haptic(); const k = r.dataset.m; closeSheet();
+    if (k === "ava") openAvatar(p, nm, showProfile); else if (k === "bal") balanceScreen("in"); else if (k === "ord") { state.sub = "orders"; showOrders(); }
+    else if (k === "promo") openPromo(); else if (k === "help") switchTab("help"); else { const s = state.seller; if (s && s.status === "approved") { const u = "https://t.me/" + (s.seller_bot || "azika_sellers_bot"); tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); } else if (s && s.status === "pending") toast("Заявка уже на рассмотрении"); else openApply(); } });
 }
 
 /* ---------- Кабинет продавца ---------- */
@@ -1206,10 +1251,11 @@ function updBal() {
 }
 $("#bal").onclick = () => switchTab("profile");
 function switchTab(t) {
-  closeSheet(); state.tab = t; state.game = null; haptic();
+  closeSheet(); state.sub = t === "orders" ? "orders" : null; if (t === "orders") t = "profile", state.sub = "orders";
+  state.tab = t; state.game = null; haptic();
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.t === t));
   moveInd(t); scrollTo({ top: 0 });
-  ({ shop: showHome, orders: showOrders, chats: showChats, profile: showProfile, help: showHelp })[t]();
+  (state.sub === "orders" ? showOrders : { shop: showHome, chats: showChats, profile: showProfile, help: showHelp }[t])();
 }
 document.querySelectorAll(".tab").forEach(el => el.onclick = () => switchTab(el.dataset.t));
 addEventListener("resize", () => moveInd(state.tab));

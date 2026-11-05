@@ -64,6 +64,7 @@ _LIMS = [int(x) for x in os.getenv("SELLER_LIMITS", "3,10,30,100").split(",")]  
 SELLER_LEVELS = [("Новичок", 0, 0, 0.0, _FEES[0], _LIMS[0]), ("Продавец", 5, 0, 0.0, _FEES[1], _LIMS[1]),
                  ("Профи", 20, 5, 4.5, _FEES[2], _LIMS[2]), ("Топ-продавец", 50, 10, 4.7, _FEES[3], _LIMS[3])]
 SELLER_FEE = max(_FEES)
+WALLET_OUT_FEE = float(os.getenv("WALLET_OUT_FEE", "1"))  # комиссия вывода с кошелька покупателя, %
 PAYOUT_MIN = int(os.getenv("PAYOUT_MIN", "100"))         # минимальный вывод продавца, ⭐
 SELLER_BOT_TOKEN = os.getenv("SELLER_BOT_TOKEN", "")     # токен отдельного бота «Azika Sellers» (необязательно)
 AD_PRICE = int(os.getenv("AD_PRICE_PER_DAY", "30"))       # реклама товара, ⭐ в сутки
@@ -260,6 +261,9 @@ def init_db():
         c.execute("CREATE TABLE IF NOT EXISTS admin_msgs(id INTEGER PRIMARY KEY AUTOINCREMENT, seller_id INTEGER, from_admin INTEGER, text TEXT, created INTEGER, read INTEGER DEFAULT 0)")
         c.execute("CREATE INDEX IF NOT EXISTS ix_adm_msg ON admin_msgs(seller_id)")
         c.execute("CREATE TABLE IF NOT EXISTS seen(user_id INTEGER PRIMARY KEY, ts INTEGER)")
+        _addcol(c, "payouts", "kind", "TEXT DEFAULT 'seller'")   # seller | wallet (вывод с баланса покупателя)
+        _addcol(c, "payouts", "fee", "INTEGER DEFAULT 0")
+        _addcol(c, "users", "chat_notify", "INTEGER DEFAULT 1")   # 0 = не слать в бота сообщения из чатов заказов
         _addcol(c, "users", "wallet", "INTEGER DEFAULT 0")   # внутренний баланс в ⭐ (пополняется Stars, тратится на заказы)
         c.execute("CREATE TABLE IF NOT EXISTS wallet_tx(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, kind TEXT, stars INTEGER, title TEXT DEFAULT '', "
                   "status TEXT DEFAULT 'done', ref TEXT DEFAULT '', created INTEGER)")
@@ -773,6 +777,23 @@ def expire_old_orders() -> list:
     return [(r[1], r[0], r[2]) for r in rows]
 
 
+def chat_notify_on(uid: int) -> bool:
+    with closing(db()) as c:
+        r = c.execute("SELECT chat_notify FROM users WHERE user_id=?", (uid,)).fetchone()
+    return not r or r[0] is None or r[0] != 0
+
+
+async def api_notify_set(request):
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    on = 1 if data.get("on") else 0
+    with closing(db()) as c:
+        c.execute("UPDATE users SET chat_notify=? WHERE user_id=?", (on, user["id"]))
+        c.commit()
+    return web.json_response({"ok": True, "notify": bool(on)})
+
+
 def profile_data(uid: int) -> dict:
     with closing(db()) as c:
         u = c.execute("SELECT name,username,bonus,ref_earned,joined FROM users WHERE user_id=?", (uid,)).fetchone()
@@ -786,7 +807,7 @@ def profile_data(uid: int) -> dict:
     return {"id": uid, "name": name, "username": username, "orders": done[0], "spent": done[1],
             "bonus": bonus, "earned": earned, "invited": invited, "buyers": buyers,
             "ref_percent": REF_PERCENT, "ref_link": link, "joined": fmt_time(joined), "cb": cb_level(uid),
-            "av": av_url(uid), "av_custom": os.path.exists(_av_custom(uid)), "wallet": wallet_of(uid)}
+            "av": av_url(uid), "av_custom": os.path.exists(_av_custom(uid)), "wallet": wallet_of(uid), "notify": chat_notify_on(uid)}
 
 
 # ==========================================
@@ -1655,7 +1676,7 @@ async def cb_moderate(callback: CallbackQuery):
                                    else f"❌ Товар «{escape(r[1])}» отклонён модератором."))
             note = "✅ Опубликован" if new == "active" else "❌ Отклонён"
         else:
-            r = c.execute("SELECT seller_id,stars FROM payouts WHERE id=? AND status='pending'", (num,)).fetchone()
+            r = c.execute("SELECT seller_id,stars,COALESCE(kind,'seller') FROM payouts WHERE id=? AND status='pending'", (num,)).fetchone()
             if not r:
                 await callback.answer("Уже обработано", show_alert=True)
                 return
@@ -1665,7 +1686,11 @@ async def cb_moderate(callback: CallbackQuery):
                 note = "✅ Выплачено"
             else:
                 c.execute("UPDATE payouts SET status='rejected' WHERE id=?", (num,))
-                c.execute("UPDATE sellers SET balance=balance+? WHERE user_id=?", (r[1], r[0]))
+                if r[2] == "wallet":
+                    c.execute("UPDATE users SET wallet=COALESCE(wallet,0)+? WHERE user_id=?", (r[1], r[0]))
+                    c.execute("INSERT INTO wallet_tx(user_id,kind,stars,title,status,ref,created) VALUES(?,?,?,?,?,?,?)", (r[0], "refund", r[1], f"Возврат вывода #{num}", "done", f"po:{num}", int(time.time())))
+                else:
+                    c.execute("UPDATE sellers SET balance=balance+? WHERE user_id=?", (r[1], r[0]))
                 await notify_seller(r[0], f"↩️ Выплата #{num} отклонена, {r[1]}⭐ вернулись на баланс.")
                 note = "↩️ Отклонено, баланс возвращён"
             c.commit()
@@ -2412,6 +2437,8 @@ async def chat_send(oid: int, uid: int, text: str) -> tuple[bool, str]:
         c.execute("INSERT INTO messages(order_id,from_id,to_id,text,created) VALUES(?,?,?,?,?)", (oid, uid, to, text, int(time.time())))
         c.commit()
     head = f"💬 Заказ #{oid} · {escape(o['label'])}\n"
+    if not chat_notify_on(to):
+        return True, ""
     if role == "buyer":
         await notify_seller(to, head + f"Покупатель {escape(user_info(uid).split(' @')[0] or 'покупатель')}:\n{escape(text)}", reply_kb(oid))
     else:
@@ -2609,7 +2636,54 @@ async def api_wallet(request):
     user, _ = await _auth(request)
     if not user:
         return _deny()
-    return web.json_response({"ok": True, "wallet": wallet_of(user["id"]), "history": wallet_history(user["id"]), "min": WALLET_MIN, "max": WALLET_MAX})
+    return web.json_response({"ok": True, "wallet": wallet_of(user["id"]), "history": wallet_history(user["id"]), "min": WALLET_MIN, "max": WALLET_MAX, "out_fee": WALLET_OUT_FEE, "out_min": PAYOUT_MIN})
+
+
+async def api_wallet_withdraw(request):
+    """Вывод с баланса покупателя: комиссия WALLET_OUT_FEE %, выплачивает админ вручную."""
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    uid = user["id"]
+    try:
+        amount = int(data.get("stars"))
+    except (TypeError, ValueError):
+        return web.json_response({"ok": False, "msg": "Введи сумму"})
+    details = _clip(data.get("details"), 200)
+    have = wallet_of(uid)
+    if amount < PAYOUT_MIN or amount > have:
+        return web.json_response({"ok": False, "msg": f"Сумма от {PAYOUT_MIN} ⭐ и не больше баланса ({have} ⭐)"})
+    if len(details) < 5:
+        return web.json_response({"ok": False, "msg": "Укажи, куда выплатить (карта, кошелёк или @username)"})
+    if not rate_ok(-uid - 11, 5, 600):
+        return web.json_response({"ok": False, "msg": "Слишком часто, подожди немного"})
+    fee = max(1, int(-(-amount * WALLET_OUT_FEE // 100)))
+    net = amount - fee
+    if not wallet_spend(uid, amount):
+        return web.json_response({"ok": False, "msg": "Недостаточно средств"})
+    full = f"💼 С баланса покупателя · комиссия {fee}⭐ · к выплате {net}⭐ · {details}"
+    with closing(db()) as c:
+        cur = c.execute("INSERT INTO payouts(seller_id,stars,details,created,kind,fee) VALUES(?,?,?,?,?,?)", (uid, amount, full, int(time.time()), "wallet", fee))
+        c.commit()
+        pid = cur.lastrowid
+    wallet_log(uid, "withdraw", -amount, f"Вывод #{pid}", ref=f"po:{pid}")
+    try:
+        await bot.send_message(ADMIN_ID, f"💸 <b>Вывод с баланса #{pid}</b>\n{user_info(uid)} (<code>{uid}</code>)\n"
+                                         f"Списано: <b>{amount}⭐</b> · комиссия {fee}⭐ · <b>к выплате {net}⭐</b>\nКуда: {escape(details)}",
+                               reply_markup=_kb(("✅ Выплачено", f"payok:{pid}"), ("↩️ Отклонить", f"payno:{pid}")))
+    except Exception:
+        logging.exception("wallet withdraw notify")
+    return web.json_response({"ok": True, "wallet": wallet_of(uid), "fee": fee, "net": net, "id": pid})
+
+
+async def api_wallet_payouts(request):
+    user, _ = await _auth(request)
+    if not user:
+        return _deny()
+    with closing(db()) as c:
+        rows = c.execute("SELECT id,stars,fee,details,status,created FROM payouts WHERE seller_id=? AND kind='wallet' ORDER BY id DESC LIMIT 60", (user["id"],)).fetchall()
+    return web.json_response({"ok": True, "fee_pct": WALLET_OUT_FEE, "min": PAYOUT_MIN,
+                              "payouts": [{"id": r[0], "stars": r[1], "fee": r[2] or 0, "details": r[3] or "", "status": r[4], "ts": r[5]} for r in rows]})
 
 
 async def api_wallet_topup(request):
@@ -2639,7 +2713,7 @@ async def api_seller_payouts(request):
     if not user:
         return _deny()
     with closing(db()) as c:
-        rows = c.execute("SELECT id,stars,details,status,created FROM payouts WHERE seller_id=? ORDER BY id DESC LIMIT 60", (user["id"],)).fetchall()
+        rows = c.execute("SELECT id,stars,details,status,created FROM payouts WHERE seller_id=? AND COALESCE(kind,'seller')='seller' ORDER BY id DESC LIMIT 60", (user["id"],)).fetchall()
     return web.json_response({"ok": True, "payouts": [{"id": r[0], "stars": r[1], "details": r[2] or "", "status": r[3], "ts": r[4]} for r in rows]})
 
 
@@ -2685,7 +2759,7 @@ def seller_payload(uid: int) -> dict:
         return {"status": "none"}
     with closing(db()) as c:
         rows = c.execute(f"SELECT {OFFER_COLS} FROM offers WHERE seller_id=? AND status!='deleted' ORDER BY id DESC", (uid,)).fetchall()
-        pend = c.execute("SELECT COALESCE(SUM(stars),0) FROM payouts WHERE seller_id=? AND status='pending'", (uid,)).fetchone()[0]
+        pend = c.execute("SELECT COALESCE(SUM(stars),0) FROM payouts WHERE seller_id=? AND status='pending' AND COALESCE(kind,'seller')='seller'", (uid,)).fetchone()[0]
         deals = c.execute("SELECT COUNT(*) FROM orders WHERE seller_id=? AND status='done'", (uid,)).fetchone()[0]
         _fee = seller_fee(uid)
         escrow = sum(r[0] * (100 - _fee) // 100 for r in c.execute(
@@ -2696,7 +2770,7 @@ def seller_payload(uid: int) -> dict:
     return {"id": uid, "since": sl.get("created") or 0, "av": av_url(uid, True), "av_custom": os.path.exists(_av_custom(uid, True)), "status": sl["status"], "balance": sl["balance"], "earned": sl["earned"], "pending_payout": pend,
             "deals": deals, "avg": avg, "reviews": cnt, "fee": seller_fee(uid), "level": seller_level(uid), "offers_used": sum(1 for o in rows if o[6] in ("pending", "active", "hidden")), "payout_min": PAYOUT_MIN,
             "seller_bot": SELLER_BOT_USERNAME, "ad_price": AD_PRICE, "verified": bool(sl.get("verified")), "verify": verify_state(uid, sl),
-            "escrow": escrow, "auto_days": AUTO_CONFIRM_DAYS, "name": seller_name(uid), "wallet": wallet_of(uid),
+            "escrow": escrow, "auto_days": AUTO_CONFIRM_DAYS, "name": seller_name(uid), "wallet": wallet_of(uid), "notify": chat_notify_on(uid),
             "unread": sum(c["unread"] for c in my_chats(uid)), "review": on_review(uid), "admin_unread": admin_unread(uid),
             "offers": [{"id": f"o{o[0]}", "game": o[2], "title": o[3], "desc": o[4], "stars": o[5], "status": o[6], "sold": o[8],
                         "ad": (o[9] or 0) > time.time(), "rank": ad_rank(o[0], o[2]), "views": views.get(o[0], 0)} for o in rows]}
@@ -2960,8 +3034,11 @@ async def start_api():
     app.router.add_route("*", "/api/seller/me", api_seller_me)
     app.router.add_route("*", "/api/seller/verify_req", api_seller_verify_req)
     app.router.add_route("*", "/api/offer_view", api_offer_view)
+    app.router.add_route("*", "/api/notify_set", api_notify_set)
     app.router.add_route("*", "/api/wallet", api_wallet)
     app.router.add_route("*", "/api/wallet/topup", api_wallet_topup)
+    app.router.add_route("*", "/api/wallet/withdraw", api_wallet_withdraw)
+    app.router.add_route("*", "/api/wallet/payouts", api_wallet_payouts)
     app.router.add_route("*", "/api/seller/payouts", api_seller_payouts)
     app.router.add_route("*", "/api/seller/admin_chat", api_seller_admin_chat)
     app.router.add_route("*", "/api/seller/admin_send", api_seller_admin_send)
@@ -3208,7 +3285,7 @@ async def s_cb(cb: CallbackQuery):
                       "✍️ Пиши сообщение — оно уйдёт покупателю. Выйти: /stop", skb([("« Чаты", "s:chats")]))
     elif act == "bal":
         with closing(db()) as c:
-            pend = c.execute("SELECT COALESCE(SUM(stars),0) FROM payouts WHERE seller_id=? AND status='pending'", (uid,)).fetchone()[0]
+            pend = c.execute("SELECT COALESCE(SUM(stars),0) FROM payouts WHERE seller_id=? AND status='pending' AND COALESCE(kind,'seller')='seller'", (uid,)).fetchone()[0]
         await out(cb, f"💰 <b>Баланс</b>: {sl['balance']}⭐\nВсего заработано: {sl['earned']}⭐" + (f"\nНа выводе: {pend}⭐" if pend else "") +
                   f"\nМинимальный вывод {PAYOUT_MIN}⭐. Выплачивает админ вручную.",
                   skb([("💸 Вывести", "s:pay")], [("« Меню", "s:menu")]))
