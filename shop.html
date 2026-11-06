@@ -366,6 +366,7 @@ textarea.f{resize:none;height:58px}
 .qs-w{position:relative}.qs-w .qa{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:rgba(20,16,40,.85);color:#fff;font-size:18px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0;backdrop-filter:blur(6px)}
 .qs-w .qa.l{left:-6px}.qs-w .qa.r{right:-6px}.qs-w .qs-g .qa{top:40%}
 .me .hbg{width:40px;height:40px;font-size:18px}.me .tapme{display:none}
+.chv{display:flex;align-items:center;justify-content:space-between;cursor:pointer}.chvb{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:20px;line-height:1;cursor:pointer;transition:transform .25s;transform:rotate(-90deg);display:grid;place-items:center;padding:0}.chvb.open{transform:rotate(0)}
 </style>
 </head>
 <body>
@@ -688,25 +689,21 @@ function bind() {
 }
 
 /* ---------- Страница игры ---------- */
-function showGame(id, src) {
+function showGame(id) {
   const g = state.games.find(x => x.id === id); if (!g) return;
   state.game = g; setBack(true); scrollTo({ top: 0 });
-  const own = g.packs.filter(p => !p.offer), sel = g.packs.filter(p => p.offer);
-  if (src) state.src = src; else if (state.srcGame !== id) state.src = own.length || !sel.length ? "own" : "sel";
-  state.srcGame = id; const on = state.src;
-  let list = (on === "own" ? own : sel).slice();
+  const own = g.packs.filter(p => !p.offer);
+  let list = g.packs.filter(p => p.offer);
   if (state.sort === "cheap") list.sort((a, b) => a.stars - b.stars);
   if (state.sort === "exp") list.sort((a, b) => b.stars - a.stars);
-  const mp = (on === "own" ? own : sel).length ? Math.min(...list.map(p => p.stars)) : 0;
-  const seg = (k, ico, t, n) => `<button class="gseg ${on === k ? "on" : ""}" data-k="${k}"><span>${ico}</span><b>${t}</b><small>${n}</small></button>`;
+  const mp = list.length ? Math.min(...list.map(p => p.stars)) : 0;
   view(`
-    <div class="cover up">${art(g, 150)}<div class="tx"><h2>${esc(g.name)}</h2><p>${list.length} ${plural(list.length, "товар", "товара", "товаров")}${mp ? " · от " + mp + " ⭐" : ""} · оплата Stars</p></div></div>
-    <div class="gsegs up">${seg("own", "🏬", "Azika", own.length)}${seg("sel", "👥", "Продавцы", sel.length)}</div>
+    <div class="cover up">${art(g, 150)}<div class="tx"><h2>${esc(g.name)}</h2><p>Товары продавцов · ${list.length} ${plural(list.length, "товар", "товара", "товаров")}${mp ? " · от " + mp + " ⭐" : ""}</p></div></div>
     <div class="sort">${[["pop", "Популярные"], ["cheap", "Дешевле"], ["exp", "Дороже"]].map(([k, v]) => `<div class="chip ${state.sort === k ? "on" : ""}" data-s="${k}">${v}</div>`).join("")}</div>
     ${list.length ? list.map((p, i) => prow(g, p, i)).join("")
-      : `<div class="empty up"><div style="font-size:44px">${on === "sel" ? "🛒" : "📭"}</div>${on === "sel" ? "Ничего нет — всё распродали.<br>Загляни позже: продавцы выставляют новые товары." : "Здесь пока нет товаров."}</div>`}`);
+      : `<div class="empty up"><div style="font-size:44px">🛒</div>Ничего нет — всё распродали.<br>Загляни позже: продавцы выставляют новые товары.${own.length ? '<br><button id="toOwn">Купить в Azika Shop</button>' : ""}</div>`}`);
   document.querySelectorAll(".pbar").forEach(el => el.onclick = () => { haptic(); openSheet(g, g.packs.find(p => p.id === el.dataset.p)); });
-  document.querySelectorAll(".gseg").forEach(el => el.onclick = () => { haptic(); showGame(id, el.dataset.k); });
+  if ($("#toOwn")) $("#toOwn").onclick = () => { haptic(); state.qg = id; state.qp = null; state.qv = null; state.game = null; setBack(false); showHome(); scrollTo({ top: 0 }); };
   bindSellers();
   document.querySelectorAll(".chip[data-s]").forEach(el => el.onclick = () => { state.sort = el.dataset.s; haptic(); showGame(id); });
 }
@@ -1191,8 +1188,8 @@ async function showProfile() {
         <div class="stat" id="stOrd" style="cursor:pointer"><b data-n="${p.orders}">0</b><span>заказов ›</span></div>
         <div class="stat"><b data-n="${p.spent}">0</b><span>потрачено ⭐</span></div>
         <div class="stat g"><b data-n="${p.bonus}">0</b><span>баллов</span></div></div>
-      <div class="card up" style="--i:2"><h4>🎮 Мои аккаунты</h4><p>Сохрани почту Supercell ID или ID игрока — подставим при покупке.</p>
-        <div id="accs">${accRows(p.ids || {})}</div></div>
+      <div class="card up" style="--i:2"><div class="chv" id="accH"><h4 style="margin:0">🎮 Мои аккаунты</h4><button class="chvb ${store("accs_open") === "0" ? "" : "open"}" id="accT" aria-label="Свернуть">⌄</button></div><p style="margin-top:8px">Сохрани почту Supercell ID или ID игрока — подставим при покупке.</p>
+        <div id="accs" style="${store("accs_open") === "0" ? "display:none" : ""}">${accRows(p.ids || {})}</div></div>
       <div class="card up" style="--i:2"><h4>🎟 Промокод</h4><p>${state.promo ? "Активен: " + esc(state.promo.code) + " (−" + state.promo.pct + "%). Применится к следующему заказу." : "Есть промокод? Активируй — скидка применится при оплате."}</p>
         <button class="btn ghost" id="pcOpen">${state.promo ? "Изменить промокод" : "Ввести промокод"}</button></div>
       <div class="card ref up" style="--i:3"><h4>🎁 Приглашай друзей</h4>
@@ -1201,6 +1198,7 @@ async function showProfile() {
         <button class="sh" id="shr">Поделиться ссылкой</button>
         <div class="rs"><div><b data-n="${p.invited}">0</b><span>приглашено</span></div><div><b data-n="${p.buyers}">0</b><span>купили</span></div><div><b data-n="${p.earned}">0</b><span>заработано баллов</span></div></div></div>`);
     document.querySelectorAll("[data-n]").forEach(el => countUp(el, +el.dataset.n));
+    $("#accH").onclick = () => { const a = $("#accs"), t = $("#accT"), open = a.style.display === "none"; a.style.display = open ? "" : "none"; t.classList.toggle("open", open); store("accs_open", open ? "1" : "0"); haptic(); };
     state.ids = p.ids || {}; document.querySelectorAll("#accs [data-acc]").forEach(r => r.onclick = () => { haptic(); accSheet(r.dataset.acc); });
     $("#pcOpen").onclick = openPromo; $("#wal2").onclick = () => { haptic(); balanceScreen("in"); };
     $("#stOrd").onclick = () => { haptic(); state.sub = "orders"; showOrders(); };
@@ -1224,6 +1222,7 @@ async function showProfile() {
 
 
 function menuSheet(p, nm) {
+  const sl = state.seller;
   sheetOpen(`<div class="sh-h"><div><h3>Меню</h3><p>${esc(nm)}${p.username ? " · @" + esc(p.username) : ""}</p></div></div>
     <div class="mnr" data-m="ava"><div class="mi">📷</div><b>Изменить фото</b><i>›</i></div>
     <div class="mnr nsw"><div class="mi">✈️</div><b>Вы вошли через Telegram<small style="display:block;font-weight:600;color:var(--muted);font-size:12px">ID ${p.id}</small></b></div>
@@ -1232,7 +1231,7 @@ function menuSheet(p, nm) {
     <div class="mnr" data-m="ord"><div class="mi">📦</div><b>Мои покупки</b><i>›</i></div>
     <div class="mnr" data-m="promo"><div class="mi">🎟</div><b>Промокод</b><i>›</i></div>
     <div class="mnr" data-m="help"><div class="mi">🆘</div><b>Написать в поддержку</b><i>›</i></div>
-    <div class="mnr" data-m="sell"><div class="mi">💼</div><b>Подать заявку для селлера</b><i>›</i></div>`);
+    <div class="mnr" data-m="sell"><div class="mi">${sl && sl.status === "approved" ? "🤖" : "💼"}</div><b>${sl && sl.status === "approved" ? "Перейти в бота селлера" : sl && sl.status === "pending" ? "Заявка селлера на рассмотрении" : "Подать заявку для селлера"}</b><i>›</i></div>`);
   $("#ntg").onclick = async () => { const b = $("#ntg"), on = !b.classList.contains("on"); b.classList.toggle("on", on); haptic();
     try { const r = await api("/api/notify_set", {on}); if (!r.ok) throw 0; p.notify = on; } catch (e) { b.classList.toggle("on", !on); toast("Нет связи"); } };
   document.querySelectorAll("#sheet [data-m]").forEach(r => r.onclick = () => { haptic(); const k = r.dataset.m; closeSheet();

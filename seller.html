@@ -233,8 +233,10 @@ async function api(path, body) {
   return r.json();
 }
 const view = h => {
-  const v = $("#view"); v.innerHTML = (S.tab === "orders" ? '<button class="bkp" id="bkp">‹ Профиль</button>' : "") + h;
-  if (S.tab === "orders" && $("#bkp")) $("#bkp").onclick = () => { haptic(); S.dir = -1; S.tab = "money"; go(); }; window.scrollTo(0, 0);
+  const inl = S.tab === "orders" && S.from === "offers";
+  const v = $("#view"); v.innerHTML = (S.tab === "orders" ? (inl ? '<div class="pls" id="salesPills"><button id="spOff">Мои товары</button><button class="on">Продажи</button><button id="spRev">Отзывы</button></div>' : '<button class="bkp" id="bkp">‹ Профиль</button>') : "") + h;
+  if (S.tab === "orders" && $("#bkp")) $("#bkp").onclick = () => { haptic(); S.dir = -1; S.tab = "money"; go(); };
+  if (inl) { $("#spOff").onclick = () => { haptic(); S.dir = -1; S.tab = "offers"; go(); }; $("#spRev").onclick = openReviews; } window.scrollTo(0, 0);
   v.style.animation = "none"; void v.offsetWidth; v.style.animation = ""; S.dir = 0;
 };
 function fmtLeft(sec) { const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600); return d ? `${d} дн. ${h} ч` : h ? `${h} ч` : "менее часа"; }
@@ -270,14 +272,14 @@ const ICO = {
   money: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1"/>'
 };
 function drawTabs() {
-  const T = [["offers", "Товары"], ["promos", "Промо"], ["chats", "Чаты"], ["money", "Профиль"]], act = S.tab === "orders" ? "money" : S.tab;
+  const T = [["offers", "Товары"], ["promos", "Промо"], ["chats", "Чаты"], ["money", "Профиль"]], act = S.tab === "orders" ? (S.from === "offers" ? "offers" : "money") : S.tab;
   const un = S.me ? (S.me.unread || 0) + (S.me.admin_unread || 0) : 0;
   $("#tabs").innerHTML = T.map(([k, l]) => `<button data-t="${k}" class="${act === k ? "on" : ""}"><svg viewBox="0 0 24 24">${ICO[k]}</svg>${l}${k === "chats" && un ? `<i>${un}</i>` : ""}</button>`).join("");
-  $("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => { if (act === b.dataset.t && S.tab === act) return; haptic(); const T = ["offers", "promos", "chats", "money"]; S.dir = T.indexOf(b.dataset.t) - T.indexOf(act); S.tab = b.dataset.t; go(); });
+  $("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => { if (act === b.dataset.t && S.tab === act) return; haptic(); const T = ["offers", "promos", "chats", "money"]; S.dir = T.indexOf(b.dataset.t) - T.indexOf(act); S.from = ""; S.tab = b.dataset.t; go(); });
 }
 setInterval(async () => { if (document.hidden || !S.me) return; try { const m = await api("/api/seller/me", {}); if (m.ok) { S.me.unread = m.unread || 0; S.me.admin_unread = m.admin_unread || 0; drawTabs(); } } catch (e) {} }, 25000);
 function go() { try { go0(); } catch (e) { view(`<div class="err">Ошибка: ${esc(e.message || e)}<br><button class="btn ghost" onclick="go()">Повторить</button></div>`); } }
-function go0() { drawTabs(); $("#ind").style.transform = `translateX(${["offers", "promos", "chats", "money"].indexOf(S.tab === "orders" ? "money" : S.tab) * 100}%)`; ({ orders: showOrders, offers: showOffers, promos: showPromos, chats: showChats, money: showMoney })[S.tab](); }
+function go0() { drawTabs(); $("#ind").style.transform = `translateX(${["offers", "promos", "chats", "money"].indexOf(S.tab === "orders" ? (S.from === "offers" ? "offers" : "money") : S.tab) * 100}%)`; ({ orders: showOrders, offers: showOffers, promos: showPromos, chats: showChats, money: showMoney })[S.tab](); }
 
 /* старт */
 async function boot() {
@@ -347,6 +349,7 @@ async function showOffers() {
       <div class="idl">${me.reviews ? `<span class="st">★</span>${me.avg} <a id="rvl">${me.reviews} ${me.reviews === 1 ? "отзыв" : "отзывов"}</a>` : '<span style="color:var(--muted)">пока нет отзывов</span>'}</div>
       <p>${since ? "в Azika с " + since : "новый продавец"}</p>
       <div class="lvrow"><button class="lvl" id="lvl">⚡ ${esc(L.cur.name)} <small>· ${L.cur.fee}%</small> ›</button></div></div></div>
+    ${me.verified ? "" : `<div class="wal" id="verRow" style="margin-top:12px"><div class="wi">✓</div><div style="flex:1"><b>Галочка продавца</b><small>${me.verify && me.verify.state === "pending" ? "заявка на рассмотрении" : "требования и подать заявку"}</small></div><i>›</i></div>`}
     <div class="pls" style="margin-top:14px"><button class="on">Мои товары</button><button id="goOrd">Продажи</button><button id="goRev">Отзывы</button></div>
     <div class="pls sm"><button data-k="act" class="${tabK === "act" ? "on" : ""}">Активные${act.length ? " · " + act.length : ""}</button><button data-k="done" class="${tabK === "done" ? "on" : ""}">Завершённые${done.length ? " · " + done.length : ""}</button></div>
     <div class="note" style="margin:4px 0 0;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Объявлений: <b>${usedN} из ${lim}</b> · комиссия ${me.fee}%</span><button id="addB" style="border:0;border-radius:99px;padding:8px 14px;background:var(--grad);color:var(--onA);font:800 13px Manrope,sans-serif;cursor:pointer;white-space:nowrap">＋ Выставить</button></div>`
@@ -355,11 +358,12 @@ async function showOffers() {
   const add = () => { if (usedN >= lim) { toast(`Лимит ${lim} объявлений на уровне «${me.level.name}». Подними уровень`); levelSheet(me); return; } haptic(); offerForm(); };
   $("#addB").onclick = add; if ($("#addE")) $("#addE").onclick = add;
   $("#wal").onclick = () => { haptic(); balanceScreen("out"); };
+  if ($("#verRow")) $("#verRow").onclick = () => { haptic(); verifySheet(me); };
   $("#ava").onclick = () => { haptic(); openAvatar(me, nm, showOffers); };
   $("#lvl").onclick = () => { haptic(); levelSheet(me); };
   if ($("#rvl")) $("#rvl").onclick = openReviews;
   $("#goRev").onclick = () => { haptic(); openReviews(); };
-  $("#goOrd").onclick = () => { haptic(); S.dir = 3; S.tab = "orders"; go(); };
+  $("#goOrd").onclick = () => { haptic(); S.dir = 1; S.from = "offers"; S.tab = "orders"; go(); };
   document.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { S.ofTab = b.dataset.k; haptic(); showOffers(); });
   document.querySelectorAll("[data-o]").forEach(c => c.onclick = () => { haptic(); offerSheet(all.find(x => x.id === c.dataset.o)); });
 }
@@ -535,6 +539,31 @@ async function openChat(order, peer, label) {
 
 /* ---------- Баланс ---------- */
 
+
+function verifySheet(me) {
+  const v = me.verify || { state: me.verified ? "verified" : "can" }, st = v.state;
+  const rq = (ok, t, sub) => `<div class="mnr nsw" style="padding:11px 4px"><div class="mi" style="font-size:16px">${ok ? "✅" : "⬜"}</div><b style="font-size:14px">${t}${sub ? `<small style="display:block;font-weight:600;font-size:12px;color:var(--muted)">${sub}</small>` : ""}</b></div>`;
+  const btn = me.verified || st === "verified" ? '<div class="note" style="text-align:center"><span class="ck">✓</span> Галочка у тебя уже есть</div>'
+    : st === "pending" ? '<button class="btn ghost" disabled>⏳ Заявка на рассмотрении</button>'
+    : st === "cooldown" ? `<button class="btn ghost" disabled>Повторно — через ${v.days || 1} дн.</button>`
+    : st === "need_deal" ? '<button class="btn ghost" id="vgo">Сначала нужна сделка</button>'
+    : '<button class="btn" id="vgo">✓ Подать заявку на галочку</button>';
+  sheetOpen(`<div class="sh-h"><div><h3><span class="ck">✓</span> Галочка продавца</h3><p>Покупатели больше доверяют проверенным продавцам</p></div></div>
+    <div style="margin-bottom:6px;font-size:12px;font-weight:800;color:var(--muted)">ТРЕБОВАНИЯ</div>
+    ${rq(true, "Аккаунт продавца одобрен", "")}
+    ${rq(me.deals >= 1, "Минимум 1 завершённая сделка", `сейчас: ${me.deals}`)}
+    ${rq(false, "Без открытых споров и жалоб покупателей", "проверяет админ")}
+    ${rq(false, "Честные отзывы и хороший рейтинг", me.reviews ? `сейчас: ★ ${me.avg} · ${me.reviews} отз.` : "проверяет админ, если отзывы есть")}
+    ${rq(false, "Реальные товары без запрещённого контента и ссылок на сторонние чаты", "проверяет админ")}
+    <p class="note" style="margin:12px 0">Заявку рассматривает админ, ответ придёт в этот бот. Если отказали — повторно подать можно через 3 дня.</p>${btn}`);
+  if ($("#vgo")) $("#vgo").onclick = async () => {
+    if (st === "need_deal") { toast("Нужна хотя бы одна завершённая сделка"); return; }
+    $("#vgo").disabled = true;
+    try { const r = await api("/api/seller/verify_req", {}); toast(r.msg || (r.ok ? "Заявка отправлена" : "Не получилось"), r.ok);
+      if (r.ok || r.verify) { me.verify = r.verify || { state: "pending" }; S.me = me; closeSheet(); go(); } else $("#vgo").disabled = false; }
+    catch (e) { toast("Нет связи"); $("#vgo").disabled = false; } };
+}
+
 function menuSheet(me, nm) {
   const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user || {};
   sheetOpen(`<div class="sh-h"><div><h3>Меню</h3><p>${esc(nm)}${u.username ? " · @" + esc(u.username) : ""}</p></div></div>
@@ -543,6 +572,7 @@ function menuSheet(me, nm) {
     <div class="mnr nsw"><div class="mi">🔔</div><b>Уведомления<small style="display:block;font-weight:600;color:var(--muted);font-size:12px">Новые сообщения из чатов</small></b><button class="ntgl ${me.notify !== false ? "on" : ""}" id="ntg" aria-label="Уведомления"></button></div>
     <div class="mnr" data-m="bal"><div class="mi">💼</div><b>Баланс и выплаты</b><i>›</i></div>
     <div class="mnr" data-m="rv"><div class="mi">⭐</div><b>Мои отзывы</b><i>›</i></div>
+    ${me.verified ? "" : '<div class="mnr" data-m="ver"><div class="mi">✓</div><b>Подать заявку на галочку</b><i>›</i></div>'}
     <div class="mnr" data-m="lvl"><div class="mi">⚡</div><b>Уровень и комиссия</b><i>${me.fee}% ›</i></div>
     <div class="mnr" data-m="sup"><div class="mi">🆘</div><b>Написать в поддержку</b><i>›</i></div>
     <div class="mnr" data-m="bot"><div class="mi">🤖</div><b>Открыть бота</b><i>›</i></div>`);
@@ -550,7 +580,7 @@ function menuSheet(me, nm) {
   $("#ntg").onclick = async () => { const b = $("#ntg"), on = !b.classList.contains("on"); b.classList.toggle("on", on); haptic();
     try { const r = await api("/api/notify_set", {on}); if (!r.ok) throw 0; me.notify = on; } catch (e) { b.classList.toggle("on", !on); toast("Нет связи"); } };
   document.querySelectorAll("#sheet [data-m]").forEach(r => r.onclick = () => { haptic(); const k = r.dataset.m; closeSheet();
-    if (k === "ava") openAvatar(me, nm, showMoney); else if (k === "bal") balanceScreen("out"); else if (k === "rv") openReviews(); else if (k === "lvl") levelSheet(me);
+    if (k === "ava") openAvatar(me, nm, showMoney); else if (k === "bal") balanceScreen("out"); else if (k === "rv") openReviews(); else if (k === "lvl") levelSheet(me); else if (k === "ver") verifySheet(me);
     else if (k === "sup") open("https://t.me/" + (S.support || "@azikashop_support_bot").replace(/^@/, "") + "?start=seller"); else open("https://t.me/azika_sellers_bot"); });
 }
 async function showMoney() {
@@ -573,10 +603,11 @@ async function showMoney() {
   $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(me); };
   $("#wal2").onclick = () => { haptic(); balanceScreen("out"); };
   $("#pOff").onclick = () => { haptic(); S.dir = -1; S.tab = "offers"; go(); };
-  $("#pOrd").onclick = () => { haptic(); S.dir = 1; S.tab = "orders"; go(); };
+  $("#pOrd").onclick = () => { haptic(); S.dir = 1; S.from = "money"; S.tab = "orders"; go(); };
   $("#pMnu").onclick = () => { haptic(); menuSheet(me, nm); };
   $("#sup").onclick = () => { const u = "https://t.me/" + (S.support || "@azikashop_support_bot").replace(/^@/, "") + "?start=seller"; tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); };
   $("#rv").onclick = openReviews;
+  if ($("#vreqs")) $("#vreqs").onclick = () => verifySheet(me);
   if ($("#vreq")) $("#vreq").onclick = async () => { $("#vreq").disabled = true;
     try { const r = await api("/api/seller/verify_req", {}); toast(r.msg || (r.ok ? "Заявка отправлена" : "Не получилось"), r.ok);
       if (r.ok || r.verify) { me.verify = r.verify || { state: "pending" }; S.me = me; showMoney(); } else $("#vreq").disabled = false; }
@@ -606,7 +637,7 @@ function verifyBlock(me) {
   if (v.state === "pending") return '<div class="note">⏳ Заявка на галочку ✓ на рассмотрении — ответ придёт в этот бот.</div>';
   if (v.state === "cooldown") return `<div class="note">Заявку на галочку отклонили. Подать снова можно через ${v.days || 1} дн.</div>`;
   if (v.state === "need_deal") return '<p>Галочку ✓ можно запросить после первой завершённой сделки.</p>';
-  return '<p>Галочка ✓ показывает покупателям, что тебе можно доверять. Админ проверит заявку и ответит.</p><button class="btn ghost" id="vreq">✓ Подать заявку на галочку</button>';
+  return '<p>Галочка ✓ показывает покупателям, что тебе можно доверять. Админ проверит заявку и ответит. <a id="vreqs" style="text-decoration:underline;cursor:pointer">Требования</a></p><button class="btn ghost" id="vreq">✓ Подать заявку на галочку</button>';
 }
 
 function cropImg(file, size = 400) {
