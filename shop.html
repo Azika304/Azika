@@ -362,6 +362,9 @@ textarea.f{resize:none;height:58px}
 .codebox b{display:block;margin-bottom:4px}.codebox p{margin:0 0 8px;font-size:13px;color:var(--muted)}
 .codebox input{width:100%;box-sizing:border-box;text-align:center;letter-spacing:6px;font:800 22px Manrope,sans-serif;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--text);margin-bottom:8px}
 .codeok{margin-top:10px;font-size:13px;color:var(--mint);font-weight:700}.codeok small{display:block;color:var(--muted);font-weight:600;margin-top:2px}
+.cap{display:flex;justify-content:space-between}.qs .cap span:last-child{font-weight:600;opacity:.7}
+.qs-w{position:relative}.qs-w .qa{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:rgba(20,16,40,.85);color:#fff;font-size:18px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0;backdrop-filter:blur(6px)}
+.qs-w .qa.l{left:-6px}.qs-w .qa.r{right:-6px}.qs-w .qs-g .qa{top:40%}
 </style>
 </head>
 <body>
@@ -398,7 +401,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const haptic = (t = "light") => { try { tg.HapticFeedback.impactOccurred(t); } catch (e) {} };
 const GROUPS = { all: "Все", supercell: "Supercell", shooter: "Шутеры", gift: "🎁 Карты" };
-let state = { qg: null, qp: null, tab: "shop", games: [], support: "@azikashop_support_bot", refPct: 5, done: 0, game: null, pack: null,
+let state = { qg: null, qp: null, qv: null, ids: {}, tab: "shop", games: [], support: "@azikashop_support_bot", refPct: 5, done: 0, game: null, pack: null,
   promo: null, promoMsg: null, useBonus: true, q: null, search: "", group: "all", sort: "pop", balance: 0, f: { games: [], min: "", max: "", sort: "pop", cb: false }, cbPct: 5, cbMin: 100, starRub: 1.59, ttl: 30, fee: 5, payoutMin: 100, feeMin: 4, shopRt: { avg: 0, count: 0 }, seller: null };
 try { const sp = JSON.parse(store("promo") || "null"); if (sp && sp.code) state.promo = sp; } catch (e) {}
 
@@ -551,24 +554,58 @@ function openFilters() {
 }
 
 
+
+function accRows(ids) {
+  return state.games.filter(g => g.kind !== "gift" && g.packs.some(p => !p.offer)).map(g => `<div class="mnr" data-acc="${esc(g.id)}"><div class="mi">${esc(g.emoji || "🎮")}</div><b>${esc(g.name)}<small style="display:block;font-weight:600;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis">${ids[g.id] ? esc(ids[g.id]) : "не указан"}</small></b><i>${ids[g.id] ? "✏️" : "＋"}</i></div>`).join("");
+}
+function accSheet(gid) {
+  const g = state.games.find(x => x.id === gid); if (!g) return;
+  sheetOpen(`<div class="sh-h"><div><h3>${esc(g.emoji || "🎮")} ${esc(g.name)}</h3><p>Запомним, чтобы не вводить каждый раз</p></div></div>
+    <div class="row"><label>${esc(g.field).toUpperCase()}</label><input class="f" id="accV" autocomplete="off" autocapitalize="off" ${g.kind === "numeric" ? 'inputmode="numeric"' : ""} value="${esc((state.ids || {})[gid] || "")}" placeholder="${esc(g.field)}"></div>
+    <button class="btn" id="accS">Сохранить</button>${(state.ids || {})[gid] ? '<button class="btn ghost" id="accD" style="margin-top:10px">Удалить</button>' : ""}`);
+  const save = async v => { try { const r = await api("/api/accounts", { game: gid, value: v }); if (!r.ok) { toast(r.msg || "Ошибка"); return; }
+    state.ids = r.ids || {}; state.qv = null; closeSheet(); toast(v ? "Сохранено" : "Удалено", true); const a = $("#accs"); if (a) { a.innerHTML = accRows(state.ids); a.querySelectorAll("[data-acc]").forEach(r => r.onclick = () => { haptic(); accSheet(r.dataset.acc); }); } } catch (e) { toast("Нет связи"); } };
+  $("#accS").onclick = () => save($("#accV").value.trim());
+  if ($("#accD")) $("#accD").onclick = () => save("");
+}
+
 /* ---------- «Мой сервис» на главной: выбор игры, пакет, ID, купить ---------- */
 function quickHtml() {
   const gs = state.games.filter(g => g.packs.some(p => !p.offer)); if (!gs.length) return "";
   if (!gs.find(g => g.id === state.qg)) { state.qg = gs[0].id; state.qp = null; }
   const g = gs.find(x => x.id === state.qg), own = g.packs.filter(p => !p.offer);
   if (!own.find(p => p.id === state.qp)) state.qp = own[Math.min(1, own.length - 1)].id;
-  const p = own.find(x => x.id === state.qp), saved = store("pid_" + g.kind) || "";
-  return `<div class="qs up" id="qs"><div class="cap">Пополнение игр · Azika Shop</div>
-    <div class="qs-g">${gs.map(x => `<button data-g="${esc(x.id)}" class="${x.id === g.id ? "on" : ""}"><span>${esc(x.emoji || "🎮")}</span>${esc(x.name)}</button>`).join("")}</div>
-    <div class="qs-p">${own.map(x => `<button data-p="${esc(x.id)}" class="${x.id === p.id ? "on" : ""}">${esc(x.label)}</button>`).join("")}</div>
-    <input class="f" id="qpl" autocomplete="off" autocapitalize="off" ${g.kind === "numeric" ? 'inputmode="numeric"' : ""} value="${esc(saved)}" placeholder="${esc(g.field)}">
+  const p = own.find(x => x.id === state.qp), val = state.qv != null ? state.qv : ((state.ids || {})[g.id] || store("pid_" + g.kind) || "");
+  const row = (cls, inner) => `<div class="qs-w"><button class="qa l" data-d="-1" aria-label="Назад">‹</button><div class="${cls}">${inner}</div><button class="qa r" data-d="1" aria-label="Дальше">›</button></div>`;
+  return `<div class="qs up" id="qs"><div class="cap"><span>Пополнение игр · Azika Shop</span><span>листай ↔</span></div>
+    ${row("qs-g", gs.map(x => `<button data-g="${esc(x.id)}" class="${x.id === g.id ? "on" : ""}"><span>${esc(x.emoji || "🎮")}</span>${esc(x.name)}</button>`).join(""))}
+    ${row("qs-p", own.map(x => `<button data-p="${esc(x.id)}" class="${x.id === p.id ? "on" : ""}">${esc(x.label)}</button>`).join(""))}
+    <input class="f" id="qpl" autocomplete="off" autocapitalize="off" ${g.kind === "numeric" ? 'inputmode="numeric"' : ""} value="${esc(val)}" placeholder="${esc(g.field)}">
     <button class="qi" id="qinfo">Как это работает? Инструкция</button>
     <button class="btn" id="qbuy">Купить за ${p.stars} ⭐</button></div>`;
 }
+function qsEdges(w) {
+  const r = w.querySelector(":scope > div"), l = w.querySelector(".qa.l"), rt = w.querySelector(".qa.r");
+  const upd = () => { l.style.display = r.scrollLeft > 6 ? "" : "none"; rt.style.display = r.scrollLeft + r.clientWidth < r.scrollWidth - 6 ? "" : "none"; };
+  r.addEventListener("scroll", upd, { passive: true }); upd();
+  w.querySelectorAll(".qa").forEach(b => b.onclick = () => { haptic(); r.scrollBy({ left: +b.dataset.d * r.clientWidth * .7, behavior: "smooth" }); });
+  const on = r.querySelector(".on"); if (on && on._first) r.scrollLeft = on.offsetLeft - r.clientWidth / 2 + on.offsetWidth / 2;
+}
+function renderQuick(focusOn) {
+  const old = $("#qs"); if (!old) return;
+  const sg = old.querySelector(".qs-g").scrollLeft, sp = old.querySelector(".qs-p").scrollLeft, same = !focusOn || focusOn === "p";
+  const t = document.createElement("div"); t.innerHTML = quickHtml(); const n = t.firstElementChild; n.classList.remove("up"); old.replaceWith(n);
+  const G = n.querySelector(".qs-g"), P = n.querySelector(".qs-p"); G.scrollLeft = sg; if (same) P.scrollLeft = sp;
+  const center = r => { const on = r.querySelector(".on"); if (on) r.scrollTo({ left: on.offsetLeft - r.clientWidth / 2 + on.offsetWidth / 2, behavior: "smooth" }); };
+  if (focusOn === "g") center(G); if (focusOn === "p") center(P);
+  bindQuick();
+}
 function bindQuick() {
   const q = $("#qs"); if (!q) return;
-  q.querySelectorAll(".qs-g button").forEach(b => b.onclick = () => { haptic(); state.qg = b.dataset.g; state.qp = null; const v = $("#qpl").value; showHome(); });
-  q.querySelectorAll(".qs-p button").forEach(b => b.onclick = () => { haptic(); state.qp = b.dataset.p; const v = $("#qpl").value; showHome(); const i = $("#qpl"); if (i) i.value = v; });
+  q.querySelectorAll(".qs-w").forEach(qsEdges);
+  q.querySelectorAll(".qs-g button[data-g]").forEach(b => b.onclick = () => { haptic(); state.qg = b.dataset.g; state.qp = null; state.qv = null; renderQuick("g"); });
+  q.querySelectorAll(".qs-p button[data-p]").forEach(b => b.onclick = () => { haptic(); state.qp = b.dataset.p; renderQuick("p"); });
+  $("#qpl").oninput = e => { state.qv = e.target.value; };
   const g = () => state.games.find(x => x.id === state.qg), p = () => g().packs.find(x => x.id === state.qp);
   $("#qinfo").onclick = () => { haptic(); infoSheet(g(), p()); };
   $("#qbuy").onclick = () => { const v = $("#qpl").value.trim(); if (!v) { toast("Введи " + g().field.split(" (")[0].toLowerCase()); $("#qpl").focus(); return; }
@@ -795,7 +832,7 @@ async function pay(useWallet) {
     const r = await api("/api/invoice", { pack: state.pack.id, player, comment: $("#comment").value.trim(),
       promo: state.promo && !state.pack.gift && !(state.q && state.q.promo_scope) ? state.promo.code : "", use_bonus: state.useBonus, use_wallet: !!useWallet });
     if (!r.ok) { toast(r.msg || "Ошибка"); return; }
-    store("pid_" + state.game.kind, player);
+    store("pid_" + state.game.kind, player); if (!state.pack.offer && !state.pack.gift) { state.ids = state.ids || {}; state.ids[state.game.id] = player; state.qv = null; }
     if (r.paid) { if (state.promo) { state.promo = null; store("promo", null); } closeSheet(); showSuccess(r.order); return; }
     if (!tg || !tg.openInvoice) { location.href = r.link; return; }
     tg.openInvoice(r.link, st => {
@@ -1153,6 +1190,8 @@ async function showProfile() {
         <div class="stat"><b data-n="${p.orders}">0</b><span>заказов</span></div>
         <div class="stat"><b data-n="${p.spent}">0</b><span>потрачено ⭐</span></div>
         <div class="stat g"><b data-n="${p.bonus}">0</b><span>баллов</span></div></div>
+      <div class="card up" style="--i:2"><h4>🎮 Мои аккаунты</h4><p>Сохрани почту Supercell ID или ID игрока — подставим при покупке.</p>
+        <div id="accs">${accRows(p.ids || {})}</div></div>
       <div class="card up" style="--i:2"><h4>🎟 Промокод</h4><p>${state.promo ? "Активен: " + esc(state.promo.code) + " (−" + state.promo.pct + "%). Применится к следующему заказу." : "Есть промокод? Активируй — скидка применится при оплате."}</p>
         <button class="btn ghost" id="pcOpen">${state.promo ? "Изменить промокод" : "Ввести промокод"}</button></div>
       <div class="card ref up" style="--i:3"><h4>🎁 Приглашай друзей</h4>
@@ -1161,6 +1200,7 @@ async function showProfile() {
         <button class="sh" id="shr">Поделиться ссылкой</button>
         <div class="rs"><div><b data-n="${p.invited}">0</b><span>приглашено</span></div><div><b data-n="${p.buyers}">0</b><span>купили</span></div><div><b data-n="${p.earned}">0</b><span>заработано баллов</span></div></div></div>`);
     document.querySelectorAll("[data-n]").forEach(el => countUp(el, +el.dataset.n));
+    state.ids = p.ids || {}; document.querySelectorAll("#accs [data-acc]").forEach(r => r.onclick = () => { haptic(); accSheet(r.dataset.acc); });
     $("#pcOpen").onclick = openPromo; $("#wal2").onclick = () => { haptic(); balanceScreen("in"); };
     $("#pBuy").onclick = () => { haptic(); state.sub = "orders"; showOrders(); };
     $("#pSell").onclick = () => { haptic(); const s = state.seller;
@@ -1338,7 +1378,7 @@ async function init() {
       (g.offers || []).forEach(o => { o.offer = true; g.packs.push(o); }); });
     state.games = r.games; state.support = r.support || state.support; state.refPct = r.ref_percent || 5; state.paused = r.paused || ""; state.cbPct = r.cashback_pct ?? 5; state.cbLevels = r.cashback_levels || []; state.cbMin = r.cashback_min || 100; state.starRub = r.star_rub || 1.59; state.done = r.done || 0;
     if (params.get("go") === "orders") switchTab("orders"); else showHome();
-    api("/api/profile", {}).then(p => { if (p && p.ok) { state.balance = p.bonus; updBal(); } }).catch(() => {});
+    api("/api/profile", {}).then(p => { if (p && p.ok) { state.balance = p.bonus; state.ids = p.ids || {}; updBal(); if ($("#qs") && state.qv == null) renderQuick(); } }).catch(() => {});
   } catch (e) {
     view(`<div class="err">Не удалось загрузить каталог.<br>${esc(e.message || "")}<br><button onclick="init()">Повторить</button></div>`);
   }

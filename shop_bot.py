@@ -246,7 +246,8 @@ def init_db():
         _addcol(c, "users", "ref_earned", "INTEGER DEFAULT 0")
         _addcol(c, "users", "photo", "TEXT DEFAULT ''")
         _addcol(c, "orders", "code_state", "TEXT DEFAULT ''")   # '' | asked (админ просит код из почты) | sent (покупатель отправил)
-        c.execute("CREATE TABLE IF NOT EXISTS game_info(key TEXT PRIMARY KEY, text TEXT)")   # своя инструкция: ключ = id игры или товара
+        c.execute("CREATE TABLE IF NOT EXISTS game_info(key TEXT PRIMARY KEY, text TEXT)")
+        c.execute("CREATE TABLE IF NOT EXISTS saved_ids(user_id INTEGER, game TEXT, value TEXT, PRIMARY KEY(user_id, game))")   # запомненные ID / почты по играм   # своя инструкция: ключ = id игры или товара
         _addcol(c, "orders", "promo", "TEXT DEFAULT ''")
         _addcol(c, "orders", "base", "INTEGER DEFAULT 0")
         _addcol(c, "orders", "bonus", "INTEGER DEFAULT 0")
@@ -806,6 +807,35 @@ def expire_old_orders() -> list:
     return [(r[1], r[0], r[2]) for r in rows]
 
 
+def saved_ids(uid: int) -> dict:
+    with closing(db()) as c:
+        return dict(c.execute("SELECT game,value FROM saved_ids WHERE user_id=?", (uid,)).fetchall())
+
+
+def save_id(uid: int, game: str, value: str):
+    with closing(db()) as c:
+        if value:
+            c.execute("INSERT OR REPLACE INTO saved_ids(user_id,game,value) VALUES(?,?,?)", (uid, game, value))
+        else:
+            c.execute("DELETE FROM saved_ids WHERE user_id=? AND game=?", (uid, game))
+        c.commit()
+
+
+async def api_accounts(request):
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    if data.get("game") is not None:
+        g = next((x for x in GAMES if x["id"] == str(data.get("game"))), None)
+        if not g:
+            return web.json_response({"ok": False, "msg": "Игра не найдена"})
+        val = _clip(data.get("value"), 80)
+        if val and not valid_player(g["kind"], val):
+            return web.json_response({"ok": False, "msg": "Проверь формат: " + g["field"]})
+        save_id(user["id"], g["id"], val)
+    return web.json_response({"ok": True, "ids": saved_ids(user["id"])})
+
+
 def chat_notify_on(uid: int) -> bool:
     with closing(db()) as c:
         r = c.execute("SELECT chat_notify FROM users WHERE user_id=?", (uid,)).fetchone()
@@ -836,7 +866,7 @@ def profile_data(uid: int) -> dict:
     return {"id": uid, "name": name, "username": username, "orders": done[0], "spent": done[1],
             "bonus": bonus, "earned": earned, "invited": invited, "buyers": buyers,
             "ref_percent": REF_PERCENT, "ref_link": link, "joined": fmt_time(joined), "cb": cb_level(uid),
-            "av": av_url(uid), "av_custom": os.path.exists(_av_custom(uid)), "wallet": wallet_of(uid), "notify": chat_notify_on(uid)}
+            "av": av_url(uid), "av_custom": os.path.exists(_av_custom(uid)), "wallet": wallet_of(uid), "notify": chat_notify_on(uid), "ids": saved_ids(uid)}
 
 
 # ==========================================
@@ -2198,6 +2228,11 @@ async def api_invoice(request):
         return web.json_response({"ok": False, "msg": "Нельзя купить свой собственный товар"})
     if not valid_player(g["kind"], player):
         return web.json_response({"ok": False, "msg": "Проверь ID игрока: " + g["field"]})
+    if g["kind"] != "gift" and not is_offer_id(pack_id):
+        try:
+            save_id(uid, g["id"], player)
+        except Exception:
+            logging.exception("save_id")
     q = calc(uid, pack_id, promo, bool(data.get("use_bonus", True)))
     if promo and not q["promo_ok"] and not q.get("promo_scope"):
         return web.json_response({"ok": False, "msg": q["promo_msg"]})
@@ -3154,6 +3189,7 @@ async def start_api():
     app.router.add_route("*", "/api/seller/verify_req", api_seller_verify_req)
     app.router.add_route("*", "/api/offer_view", api_offer_view)
     app.router.add_route("*", "/api/notify_set", api_notify_set)
+    app.router.add_route("*", "/api/accounts", api_accounts)
     app.router.add_route("*", "/api/order/code", api_order_code)
     app.router.add_route("*", "/api/wallet", api_wallet)
     app.router.add_route("*", "/api/wallet/topup", api_wallet_topup)
