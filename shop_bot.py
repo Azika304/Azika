@@ -3057,7 +3057,7 @@ async def api_seller_orders(request):
     out = []
     for r in rows:
         o = row_to_order(r)
-        out.append({"id": o["id"], "label": o["label"], "game": o["game"], "player": o["player"], "comment": o["comment"],
+        out.append({"id": o["id"], "pack": o["pack"], "label": o["label"], "game": o["game"], "player": o["player"], "comment": o["comment"],
                     "stars": o["stars"], "gain": o["stars"] * (100 - seller_fee(uid)) // 100, "status": o["status"],
                     "status_text": STATUS_TXT.get(o["status"], o["status"]), "created": fmt_time(o["created"]),
                     "unread": unread.get(o["id"], 0), "chat": o["status"] in CHAT_OPEN,

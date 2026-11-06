@@ -309,18 +309,7 @@ async function showOrders() {
   try {
     const r = await api("/api/seller/orders", {}); if (!r.ok) throw new Error(r.msg || "Ошибка");
     const need = r.orders.filter(o => o.status === "paid"), rest = r.orders.filter(o => o.status !== "paid");
-    const card = o => {
-      const n = { paid: 1, delivered: 2, dispute: 2, done: 3, refunded: 0 }[o.status] || 0;
-      return `<div class="card ord"><div class="h"><span>#${o.id} · ${esc(o.game)}</span><span class="badge ${esc(o.status)}">${esc(o.status_text)}</span></div>
-        <div class="m"><b>${esc(o.label)}</b> · ${o.stars} ⭐ · тебе <span class="gain">${o.gain} ⭐</span><br>Игрок / аккаунт: <b>${esc(o.player || "—")}</b>${o.comment ? `<br>Комментарий: ${esc(o.comment)}` : ""}<br>${esc(o.created)}</div>
-        ${o.status === "refunded" ? "" : `<div class="steps"><i class="${n >= 1 ? "ok" : ""}">✓</i><s class="${n >= 2 ? "on" : ""}"></s><i class="${n >= 3 ? "ok" : n === 2 ? "on" : ""}">${n >= 3 ? "✓" : "2"}</i><s class="${n >= 3 ? "on" : ""}"></s><i class="${n >= 3 ? "ok" : ""}">${n >= 3 ? "✓" : "3"}</i></div>
-        <div class="steps-l"><span>Оплачено</span><span>Передано</span><span>Подтверждено</span></div>`}
-        ${o.status === "paid" ? `<div class="note">💰 Покупатель оплатил, деньги у магазина. Передай товар и нажми «Передал».</div>` : ""}
-        ${o.status === "delivered" ? `<div class="note">⏳ Ждём подтверждения покупателя${o.auto_in ? ` — иначе автоматически через ${fmtLeft(o.auto_in)}` : ""}. Деньги придут на баланс.</div>` : ""}
-        ${o.status === "dispute" ? `<div class="note">⚠️ Покупатель открыл спор. Деньги заморожены — решает поддержка.</div>` : ""}
-        ${o.status === "done" ? `<div class="note">✅ +${o.gain} ⭐ зачислено на баланс.</div>` : ""}
-        <div>${o.status === "paid" ? `<button class="btn sm" data-dl="${o.id}">📦 Передал товар</button>` : ""}${o.chat ? `<button class="btn sm ghost" data-ch="${o.id}" data-l="${esc(o.label)}">💬 Чат${o.unread ? ` · ${o.unread}` : ""}</button>` : ""}</div></div>`;
-    };
+    const card = salesCard;
     view(`<div class="sect"><h3>Нужно выдать</h3><span>${need.length}</span></div>` + (need.length ? need.map(card).join("") : '<div class="empty">Новых оплаченных заказов нет</div>')
       + (rest.length ? `<div class="sect"><h3>История</h3><span>${rest.length}</span></div>` + rest.map(card).join("") : "")
       + `<div class="note" style="margin-top:6px">Схема сделки: покупатель платит → деньги держит магазин → ты выдаёшь и жмёшь «Передал» → покупатель подтверждает (или через ${r.auto_days} дн. подтверждение автоматическое) → деньги на твоём балансе.</div>`);
@@ -334,9 +323,41 @@ async function showOrders() {
 
 /* ---------- Товары ---------- */
 const OFS = { active: "в продаже", pending: "на проверке", hidden: "скрыт", rejected: "отклонён" };
+function salesCard(o) {
+      const n = { paid: 1, delivered: 2, dispute: 2, done: 3, refunded: 0 }[o.status] || 0;
+      return `<div class="card ord"><div class="h"><span>#${o.id} · ${esc(o.game)}</span><span class="badge ${esc(o.status)}">${esc(o.status_text)}</span></div>
+        <div class="m"><b>${esc(o.label)}</b> · ${o.stars} ⭐ · тебе <span class="gain">${o.gain} ⭐</span><br>Игрок / аккаунт: <b>${esc(o.player || "—")}</b>${o.comment ? `<br>Комментарий: ${esc(o.comment)}` : ""}<br>${esc(o.created)}</div>
+        ${o.status === "refunded" ? "" : `<div class="steps"><i class="${n >= 1 ? "ok" : ""}">✓</i><s class="${n >= 2 ? "on" : ""}"></s><i class="${n >= 3 ? "ok" : n === 2 ? "on" : ""}">${n >= 3 ? "✓" : "2"}</i><s class="${n >= 3 ? "on" : ""}"></s><i class="${n >= 3 ? "ok" : ""}">${n >= 3 ? "✓" : "3"}</i></div>
+        <div class="steps-l"><span>Оплачено</span><span>Передано</span><span>Подтверждено</span></div>`}
+        ${o.status === "paid" ? `<div class="note">💰 Покупатель оплатил, деньги у магазина. Передай товар и нажми «Передал».</div>` : ""}
+        ${o.status === "delivered" ? `<div class="note">⏳ Ждём подтверждения покупателя${o.auto_in ? ` — иначе автоматически через ${fmtLeft(o.auto_in)}` : ""}. Деньги придут на баланс.</div>` : ""}
+        ${o.status === "dispute" ? `<div class="note">⚠️ Покупатель открыл спор. Деньги заморожены — решает поддержка.</div>` : ""}
+        ${o.status === "done" ? `<div class="note">✅ +${o.gain} ⭐ зачислено на баланс.</div>` : ""}
+        <div>${o.status === "paid" ? `<button class="btn sm" data-dl="${o.id}">📦 Передал товар</button>` : ""}${o.chat ? `<button class="btn sm ghost" data-ch="${o.id}" data-l="${esc(o.label)}">💬 Чат${o.unread ? ` · ${o.unread}` : ""}</button>` : ""}</div></div>`;
+}
+
+function salesGrid(orders, slTab) {
+  const need = orders.filter(o => o.status === "paid"), rest = orders.filter(o => o.status !== "paid"), list = slTab === "hist" ? rest : need;
+  const bd = { paid: ["wt", "выдать"], delivered: ["wt", "ждём покупателя"], dispute: ["bd", "спор"], done: ["ok", "продано"], refunded: ["bd", "возврат"] };
+  return `<div class="pls sm"><button data-sl="need" class="${slTab !== "hist" ? "on" : ""}">Нужно выдать${need.length ? " · " + need.length : ""}</button><button data-sl="hist" class="${slTab === "hist" ? "on" : ""}">История${rest.length ? " · " + rest.length : ""}</button></div>`
+    + (list.length ? `<div class="pg">${list.map((o, i) => { const c = bd[o.status] || ["", o.status_text]; return `<div class="pc" data-so="${o.id}" style="animation-delay:${Math.min(i, 8) * 45}ms"><div class="pim">📦<img src="${esc(API + "/api/img/" + o.pack)}" alt="" onerror="this.remove()">${o.unread ? `<span class="pv">💬 ${o.unread}</span>` : ""}</div><div class="pp">+${o.gain} ⭐</div><div class="pt">${esc(o.label)}</div><div class="ps"><span class="${c[0]}">${c[1]}</span></div></div>`; }).join("")}</div>`
+      : `<div class="emp"><div class="e">${slTab === "hist" ? "📭" : "🙌"}</div><h3>${slTab === "hist" ? "Продаж пока нет" : "Всё выдано"}</h3><p>${slTab === "hist" ? "Здесь появятся завершённые и закрытые сделки" : "Новых оплаченных заказов нет"}</p></div>`);
+}
+function salesSheet(o) {
+  if (!o) return;
+  sheetOpen(salesCard(o).replace('class="card ord"', 'class="ord" style="padding:0;border:0;background:none"'));
+  document.querySelectorAll("#sheet [data-dl]").forEach(b => b.onclick = async () => {
+    if (!confirm("Ты точно выдал товар? Покупателю уйдёт запрос на подтверждение.")) return; b.disabled = true;
+    try { const x = await api("/api/seller/deliver", { order: +b.dataset.dl }); toast(x.msg || (x.ok ? "Готово" : "Ошибка"), x.ok); haptic("medium"); closeSheet(); showOffers(); } catch (e) { toast(e.message || "Нет связи"); b.disabled = false; }
+  });
+  document.querySelectorAll("#sheet [data-ch]").forEach(b => b.onclick = () => { closeSheet(); openChat(+b.dataset.ch, "Покупатель", b.dataset.l); });
+}
+
 async function showOffers() {
   view('<div class="sk"></div>');
+  const sales = S.ofSec === "sales"; let ords = [];
   try { const r = await api("/api/seller/me", {}); if (!r.ok) throw 0; S.me = fixMe(r); S.fee = r.fee; } catch (e) { view('<div class="err">Нет связи</div>'); return; }
+  if (sales) { try { const q = await api("/api/seller/orders", {}); if (q.ok) ords = q.orders; } catch (e) {} S.ords = ords; }
   const me = S.me, all = me.offers, lim = me.level.limit, usedN = me.offers_used || 0, u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user || {};
   const nm = me.name || u.first_name || "Продавец", L = sellerLevel(me);
   const act = all.filter(x => x.status === "active" || x.status === "pending"), done = all.filter(x => x.status === "hidden" || x.status === "rejected");
@@ -349,21 +370,23 @@ async function showOffers() {
       <div class="idl">${me.reviews ? `<span class="st">★</span>${me.avg} <a id="rvl">${me.reviews} ${me.reviews === 1 ? "отзыв" : "отзывов"}</a>` : '<span style="color:var(--muted)">пока нет отзывов</span>'}</div>
       <p>${since ? "в Azika с " + since : "новый продавец"}</p>
       <div class="lvrow"><button class="lvl" id="lvl">⚡ ${esc(L.cur.name)} <small>· ${L.cur.fee}%</small> ›</button></div></div></div>
-    ${me.verified ? "" : `<div class="wal" id="verRow" style="margin-top:12px"><div class="wi">✓</div><div style="flex:1"><b>Галочка продавца</b><small>${me.verify && me.verify.state === "pending" ? "заявка на рассмотрении" : "требования и подать заявку"}</small></div><i>›</i></div>`}
-    <div class="pls" style="margin-top:14px"><button class="on">Мои товары</button><button id="goOrd">Продажи</button><button id="goRev">Отзывы</button></div>
-    <div class="pls sm"><button data-k="act" class="${tabK === "act" ? "on" : ""}">Активные${act.length ? " · " + act.length : ""}</button><button data-k="done" class="${tabK === "done" ? "on" : ""}">Завершённые${done.length ? " · " + done.length : ""}</button></div>
-    <div class="note" style="margin:4px 0 0;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Объявлений: <b>${usedN} из ${lim}</b> · комиссия ${me.fee}%</span><button id="addB" style="border:0;border-radius:99px;padding:8px 14px;background:var(--grad);color:var(--onA);font:800 13px Manrope,sans-serif;cursor:pointer;white-space:nowrap">＋ Выставить</button></div>`
-    + (list.length ? `<div class="pg">${list.map((x, i) => `<div class="pc" data-o="${esc(x.id)}" style="animation-delay:${Math.min(i, 8) * 45}ms"><div class="pim">📦<img src="${esc(API + "/api/img/" + x.id)}" alt="" onerror="this.remove()"><span class="pv">👀 ${x.views || 0}</span></div><div class="pp">${x.stars} ⭐</div><div class="pt">${esc(x.title)}</div><div class="ps">${chips(x)}</div></div>`).join("")}</div>`
+    <div class="pls" style="margin-top:14px"><button id="goOff" class="${sales ? "" : "on"}">Мои товары</button><button id="goOrd" class="${sales ? "on" : ""}">Продажи</button><button id="goRev">Отзывы</button></div>
+    ${sales ? salesGrid(ords, S.slTab) : ""}
+    <div class="pls sm" style="${sales ? "display:none" : ""}"><button data-k="act" class="${tabK === "act" ? "on" : ""}">Активные${act.length ? " · " + act.length : ""}</button><button data-k="done" class="${tabK === "done" ? "on" : ""}">Завершённые${done.length ? " · " + done.length : ""}</button></div>
+    <div class="note" style="${sales ? "display:none" : "display:flex"};margin:4px 0 0;align-items:center;justify-content:space-between;gap:10px"><span>Объявлений: <b>${usedN} из ${lim}</b> · комиссия ${me.fee}%</span><button id="addB" style="border:0;border-radius:99px;padding:8px 14px;background:var(--grad);color:var(--onA);font:800 13px Manrope,sans-serif;cursor:pointer;white-space:nowrap">＋ Выставить</button></div>`
+    + (sales ? "" : list.length ? `<div class="pg">${list.map((x, i) => `<div class="pc" data-o="${esc(x.id)}" style="animation-delay:${Math.min(i, 8) * 45}ms"><div class="pim">📦<img src="${esc(API + "/api/img/" + x.id)}" alt="" onerror="this.remove()"><span class="pv">👀 ${x.views || 0}</span></div><div class="pp">${x.stars} ⭐</div><div class="pt">${esc(x.title)}</div><div class="ps">${chips(x)}</div></div>`).join("")}</div>`
       : `<div class="emp"><div class="e">${tabK === "act" ? "🙄" : "📭"}</div><h3>${tabK === "act" ? "Нет товаров" : "Здесь пока пусто"}</h3><p>${tabK === "act" ? "Пора выставить свой товар на продажу" : "Сюда попадают скрытые и отклонённые объявления"}</p>${tabK === "act" ? '<button class="btn" id="addE">Выставить товар</button>' : ""}</div>`));
   const add = () => { if (usedN >= lim) { toast(`Лимит ${lim} объявлений на уровне «${me.level.name}». Подними уровень`); levelSheet(me); return; } haptic(); offerForm(); };
   $("#addB").onclick = add; if ($("#addE")) $("#addE").onclick = add;
   $("#wal").onclick = () => { haptic(); balanceScreen("out"); };
-  if ($("#verRow")) $("#verRow").onclick = () => { haptic(); verifySheet(me); };
   $("#ava").onclick = () => { haptic(); openAvatar(me, nm, showOffers); };
   $("#lvl").onclick = () => { haptic(); levelSheet(me); };
   if ($("#rvl")) $("#rvl").onclick = openReviews;
   $("#goRev").onclick = () => { haptic(); openReviews(); };
-  $("#goOrd").onclick = () => { haptic(); S.dir = 1; S.from = "offers"; S.tab = "orders"; go(); };
+  $("#goOff").onclick = () => { haptic(); S.ofSec = "items"; showOffers(); };
+  $("#goOrd").onclick = () => { haptic(); S.ofSec = "sales"; showOffers(); };
+  document.querySelectorAll("[data-sl]").forEach(b => b.onclick = () => { S.slTab = b.dataset.sl; haptic(); showOffers(); });
+  document.querySelectorAll("[data-so]").forEach(c => c.onclick = () => { haptic(); salesSheet((S.ords || []).find(x => x.id === +c.dataset.so)); });
   document.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { S.ofTab = b.dataset.k; haptic(); showOffers(); });
   document.querySelectorAll("[data-o]").forEach(c => c.onclick = () => { haptic(); offerSheet(all.find(x => x.id === c.dataset.o)); });
 }
@@ -592,6 +615,7 @@ async function showMoney() {
       <div><h3>${esc(nm)} ${me.verified ? '<span class="ck">✓</span>' : ""}</h3><p>${u.username ? "@" + esc(u.username) + " · " : ""}ID ${me.id}</p><div class="lvrow"><button class="lvl ${store("lvl_seen2") ? "" : "pulse"}" id="lvl">⚡ ${esc(L.cur.name)} <small>· ${L.cur.fee}%</small> ›</button>${store("lvl_seen2") ? "" : '<span class="tapme">👈 нажми</span>'}</div></div></div>
     ${me.review ? '<div class="note" style="margin:0 0 12px;background:rgba(255,200,61,.14);color:var(--gold);font-size:13px">🔍 <b>Твой аккаунт на проверке.</b> Товары временно скрыты из магазина, новые покупки закрыты. Уже оплаченные заказы выполняй как обычно. Напиши администрации во вкладке «Чаты».</div>' : ""}
     <div class="wal" id="wal2"><div class="wi">💰</div><div style="flex:1"><b>${me.balance} ⭐</b><small>доступно к выплате${me.escrow ? ` · в сделках ${me.escrow} ⭐` : ""}${me.pending_payout ? ` · на выводе ${me.pending_payout} ⭐` : ""}</small></div><i>›</i></div>
+    ${me.verified ? "" : `<div class="wal" id="verRow"><div class="wi">✓</div><div style="flex:1"><b>Галочка продавца</b><small>${me.verify && me.verify.state === "pending" ? "заявка на рассмотрении" : "требования и подать заявку"}</small></div><i>›</i></div>`}
     <div class="prow2"><div class="pls"><button id="pOff">Мои товары</button><button id="pOrd">Продажи</button></div><button class="hbg" id="pMnu" aria-label="Меню">☰</button></div>
     <div class="card"><h4>Мой профиль</h4><div class="kv"><div><b>${me.deals}</b><span>сделок</span></div><div><b>${me.reviews ? "★ " + me.avg : "—"}</b><span>рейтинг</span></div><div><b>${me.reviews}</b><span>отзывов</span></div></div>
       ${verifyBlock(me)}
@@ -602,8 +626,9 @@ async function showMoney() {
   $("#ava").onclick = () => { haptic(); openAvatar(me, nm, showMoney); };
   $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(me); };
   $("#wal2").onclick = () => { haptic(); balanceScreen("out"); };
-  $("#pOff").onclick = () => { haptic(); S.dir = -1; S.tab = "offers"; go(); };
-  $("#pOrd").onclick = () => { haptic(); S.dir = 1; S.from = "money"; S.tab = "orders"; go(); };
+  if ($("#verRow")) $("#verRow").onclick = () => { haptic(); verifySheet(me); };
+  $("#pOff").onclick = () => { haptic(); S.dir = -1; S.ofSec = "items"; S.tab = "offers"; go(); };
+  $("#pOrd").onclick = () => { haptic(); S.dir = -1; S.ofSec = "sales"; S.tab = "offers"; go(); };
   $("#pMnu").onclick = () => { haptic(); menuSheet(me, nm); };
   $("#sup").onclick = () => { const u = "https://t.me/" + (S.support || "@azikashop_support_bot").replace(/^@/, "") + "?start=seller"; tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); };
   $("#rv").onclick = openReviews;
