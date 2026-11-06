@@ -365,6 +365,7 @@ textarea.f{resize:none;height:58px}
 .cap{display:flex;justify-content:space-between}.qs .cap span:last-child{font-weight:600;opacity:.7}
 .qs-w{position:relative}.qs-w .qa{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:rgba(20,16,40,.85);color:#fff;font-size:18px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0;backdrop-filter:blur(6px)}
 .qs-w .qa.l{left:-6px}.qs-w .qa.r{right:-6px}.qs-w .qs-g .qa{top:40%}
+.me .hbg{width:40px;height:40px;font-size:18px}.me .tapme{display:none}
 </style>
 </head>
 <body>
@@ -1184,10 +1185,10 @@ async function showProfile() {
     view(`
       <div class="wrow up" id="wal2"><div class="wi">💰</div><div><b>${p.wallet || 0} ⭐</b><small>баланс · пополнить или вывести</small></div><i>›</i></div>
       <div class="me up"><div class="ava" id="ava">${esc(nm.slice(0, 1).toUpperCase())}${p.av ? `<img src="${esc(API + p.av)}" ${u.photo_url ? `data-f="${esc(u.photo_url)}"` : ""} alt="" onerror="if(this.dataset.f){this.src=this.dataset.f;this.removeAttribute('data-f')}else this.remove()">` : (u.photo_url ? `<img src="${esc(u.photo_url)}" alt="">` : "")}<span class="avedit">✎</span></div>
-        <div><h3>${esc(nm)}</h3><p>${p.username ? "@" + esc(p.username) + " · " : ""}ID ${p.id}</p><div class="lvrow"><button class="lvl ${store("lvl_seen2") ? "" : "pulse"}" id="lvl">⚡ ${CBN[cbOf(p).level - 1]} <small>· кэшбэк ${cbOf(p).pct}%</small> ›</button>${store("lvl_seen2") ? "" : '<span class="tapme">👈 нажми</span>'}</div></div></div>
-      <div class="prow2 up" style="--i:1"><div class="ptabs"><button class="on" id="pBuy">Покупки</button><button id="pSell">Продажи</button></div><button class="hbg" id="pMnu" aria-label="Меню">☰</button></div>
+        <div><h3>${esc(nm)}</h3><p>${p.username ? "@" + esc(p.username) + " · " : ""}ID ${p.id}</p><div class="lvrow"><button class="lvl ${store("lvl_seen2") ? "" : "pulse"}" id="lvl">⚡ ${CBN[cbOf(p).level - 1]} <small>· кэшбэк ${cbOf(p).pct}%</small> ›</button>${store("lvl_seen2") ? "" : '<span class="tapme">👈 нажми</span>'}</div></div><button class="hbg" id="pMnu" aria-label="Меню" style="margin-left:auto;align-self:flex-start">☰</button></div>
+      
       <div class="stats up" style="--i:1">
-        <div class="stat"><b data-n="${p.orders}">0</b><span>заказов</span></div>
+        <div class="stat" id="stOrd" style="cursor:pointer"><b data-n="${p.orders}">0</b><span>заказов ›</span></div>
         <div class="stat"><b data-n="${p.spent}">0</b><span>потрачено ⭐</span></div>
         <div class="stat g"><b data-n="${p.bonus}">0</b><span>баллов</span></div></div>
       <div class="card up" style="--i:2"><h4>🎮 Мои аккаунты</h4><p>Сохрани почту Supercell ID или ID игрока — подставим при покупке.</p>
@@ -1202,11 +1203,7 @@ async function showProfile() {
     document.querySelectorAll("[data-n]").forEach(el => countUp(el, +el.dataset.n));
     state.ids = p.ids || {}; document.querySelectorAll("#accs [data-acc]").forEach(r => r.onclick = () => { haptic(); accSheet(r.dataset.acc); });
     $("#pcOpen").onclick = openPromo; $("#wal2").onclick = () => { haptic(); balanceScreen("in"); };
-    $("#pBuy").onclick = () => { haptic(); state.sub = "orders"; showOrders(); };
-    $("#pSell").onclick = () => { haptic(); const s = state.seller;
-      if (s && s.status === "approved") { const u = "https://t.me/" + (s.seller_bot || "azika_sellers_bot"); tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); }
-      else if (s && s.status === "pending") toast("Заявка на рассмотрении, бот пришлёт ответ");
-      else sheetOpen(`<div style="text-align:center;padding:10px 0 4px"><div style="font-size:54px">🙄</div><h3 style="margin:8px 0 4px">Нет товаров</h3><p style="color:var(--muted);margin:0 0 16px">Пора выставить свой товар на продажу</p><button class="btn" id="apGo">Подать заявку для селлера</button></div>`), $("#apGo").onclick = () => { closeSheet(); openApply(); }; };
+    $("#stOrd").onclick = () => { haptic(); state.sub = "orders"; showOrders(); };
     $("#pMnu").onclick = () => { haptic(); menuSheet(p, nm); };
     $("#ava").onclick = () => { haptic(); openAvatar(p, nm, showProfile); };
     $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(p); };
