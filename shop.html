@@ -347,6 +347,21 @@ textarea.f{resize:none;height:58px}
 .prow2{display:flex;gap:8px;align-items:center;margin:0 0 14px}.ptabs{display:flex;gap:8px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px 0}.ptabs::-webkit-scrollbar{display:none}
 .ptabs button{flex:none;border:0;border-radius:99px;padding:13px 20px;font:800 15px Manrope,sans-serif;background:var(--card);color:var(--text);border:1px solid var(--line);cursor:pointer;white-space:nowrap}.ptabs button.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 8px 18px rgba(192,38,211,.4)}
 .hbg{flex:none;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center}
+.qs{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.qs .cap{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px}
+.qs-g{display:flex;gap:16px;overflow-x:auto;border-bottom:1px solid var(--line);scrollbar-width:none}.qs-g::-webkit-scrollbar,.qs-p::-webkit-scrollbar{display:none}
+.qs-g button{flex:none;background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-1px;color:var(--muted);font:800 16px Manrope,sans-serif;padding:6px 0 10px;display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap}
+.qs-g button.on{color:var(--text);border-bottom-color:#c026d3}
+.qs-p{display:flex;gap:8px;overflow-x:auto;margin:12px 0;scrollbar-width:none}
+.qs-p button{flex:none;border-radius:99px;padding:10px 15px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:700 14px Manrope,sans-serif;cursor:pointer;white-space:nowrap}
+.qs-p button.on{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 6px 14px rgba(192,38,211,.35)}
+.qs .qi{display:block;margin-top:8px;font-size:13px;color:var(--muted);text-decoration:underline;cursor:pointer;background:none;border:0;padding:0;font-weight:600}
+.qs .btn{margin-top:12px}
+.infob{white-space:pre-line;font-size:13px;line-height:1.55}
+.codebox{margin-top:10px;padding:12px;border-radius:16px;background:rgba(255,200,61,.12);border:1px solid rgba(255,200,61,.35)}
+.codebox b{display:block;margin-bottom:4px}.codebox p{margin:0 0 8px;font-size:13px;color:var(--muted)}
+.codebox input{width:100%;box-sizing:border-box;text-align:center;letter-spacing:6px;font:800 22px Manrope,sans-serif;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--text);margin-bottom:8px}
+.codeok{margin-top:10px;font-size:13px;color:var(--mint);font-weight:700}.codeok small{display:block;color:var(--muted);font-weight:600;margin-top:2px}
 </style>
 </head>
 <body>
@@ -383,7 +398,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const haptic = (t = "light") => { try { tg.HapticFeedback.impactOccurred(t); } catch (e) {} };
 const GROUPS = { all: "Все", supercell: "Supercell", shooter: "Шутеры", gift: "🎁 Карты" };
-let state = { tab: "shop", games: [], support: "@azikashop_support_bot", refPct: 5, done: 0, game: null, pack: null,
+let state = { qg: null, qp: null, tab: "shop", games: [], support: "@azikashop_support_bot", refPct: 5, done: 0, game: null, pack: null,
   promo: null, promoMsg: null, useBonus: true, q: null, search: "", group: "all", sort: "pop", balance: 0, f: { games: [], min: "", max: "", sort: "pop", cb: false }, cbPct: 5, cbMin: 100, starRub: 1.59, ttl: 30, fee: 5, payoutMin: 100, feeMin: 4, shopRt: { avg: 0, count: 0 }, seller: null };
 try { const sp = JSON.parse(store("promo") || "null"); if (sp && sp.code) state.promo = sp; } catch (e) {}
 
@@ -535,6 +550,33 @@ function openFilters() {
   $("#fApply").onclick = () => { f.min = $("#fmin").value.replace(/\D/g, ""); f.max = $("#fmax").value.replace(/\D/g, ""); closeSheet(); showHome(); scrollTo({ top: 0 }); };
 }
 
+
+/* ---------- «Мой сервис» на главной: выбор игры, пакет, ID, купить ---------- */
+function quickHtml() {
+  const gs = state.games.filter(g => g.packs.some(p => !p.offer)); if (!gs.length) return "";
+  if (!gs.find(g => g.id === state.qg)) { state.qg = gs[0].id; state.qp = null; }
+  const g = gs.find(x => x.id === state.qg), own = g.packs.filter(p => !p.offer);
+  if (!own.find(p => p.id === state.qp)) state.qp = own[Math.min(1, own.length - 1)].id;
+  const p = own.find(x => x.id === state.qp), saved = store("pid_" + g.kind) || "";
+  return `<div class="qs up" id="qs"><div class="cap">Пополнение игр · Azika Shop</div>
+    <div class="qs-g">${gs.map(x => `<button data-g="${esc(x.id)}" class="${x.id === g.id ? "on" : ""}"><span>${esc(x.emoji || "🎮")}</span>${esc(x.name)}</button>`).join("")}</div>
+    <div class="qs-p">${own.map(x => `<button data-p="${esc(x.id)}" class="${x.id === p.id ? "on" : ""}">${esc(x.label)}</button>`).join("")}</div>
+    <input class="f" id="qpl" autocomplete="off" autocapitalize="off" ${g.kind === "numeric" ? 'inputmode="numeric"' : ""} value="${esc(saved)}" placeholder="${esc(g.field)}">
+    <button class="qi" id="qinfo">Как это работает? Инструкция</button>
+    <button class="btn" id="qbuy">Купить за ${p.stars} ⭐</button></div>`;
+}
+function bindQuick() {
+  const q = $("#qs"); if (!q) return;
+  q.querySelectorAll(".qs-g button").forEach(b => b.onclick = () => { haptic(); state.qg = b.dataset.g; state.qp = null; const v = $("#qpl").value; showHome(); });
+  q.querySelectorAll(".qs-p button").forEach(b => b.onclick = () => { haptic(); state.qp = b.dataset.p; const v = $("#qpl").value; showHome(); const i = $("#qpl"); if (i) i.value = v; });
+  const g = () => state.games.find(x => x.id === state.qg), p = () => g().packs.find(x => x.id === state.qp);
+  $("#qinfo").onclick = () => { haptic(); infoSheet(g(), p()); };
+  $("#qbuy").onclick = () => { const v = $("#qpl").value.trim(); if (!v) { toast("Введи " + g().field.split(" (")[0].toLowerCase()); $("#qpl").focus(); return; }
+    store("pid_" + g().kind, v); haptic(); openSheet(g(), p()); };
+}
+function infoText(g, p) { return (p && p.info) || g.info || ""; }
+function infoSheet(g, p) { sheetOpen(`<div class="sh-h"><div><h3>📖 Инструкция</h3><p>${esc(g.name)}</p></div></div><div class="infob">${esc(infoText(g, p)) || "Инструкции пока нет."}</div>`); }
+
 function showHome() {
   state.game = null; state.pack = null; setBack(false);
   const q = state.search.trim().toLowerCase();
@@ -559,11 +601,12 @@ function showHome() {
   }
   const n = fCount();
   view(`
+    ${!q && !fCount() ? quickHtml() : ""}
     <div class="search up">${SEARCH}<input id="q" placeholder="Поиск игры или товара" value="${esc(state.search)}" autocomplete="off"></div>
     <div class="fbar up" id="fb"><span>Фильтры${n ? `<b>· ${n}</b>` : ""}</span>${SORTI}</div>
     <div class="chips">${Object.entries(GROUPS).map(([k, v]) => `<div class="chip ${state.group === k ? "on" : ""}" data-k="${k}">${v}</div>`).join("")}</div>
     ${body}`);
-  bind();
+  bind(); bindQuick();
   $("#fb").onclick = () => { haptic(); openFilters(); };
 }
 
@@ -671,10 +714,12 @@ function openSheet(g, p) {
     ${p.gift ? "" : '<div class="row"><label>ПРОМОКОД</label><div id="promoBox"></div></div>'}
     <div id="bonusRow"></div>
     <div class="sum" id="sum"></div>
+    ${!p.offer && infoText(g, p) ? '<button class="chb" id="infoBtn" style="margin:0 0 10px">📖 Инструкция по покупке</button><div class="odesc infob" id="infoBox" style="display:none">' + esc(infoText(g, p)) + '</div>' : ""}
     <button class="btn" id="payBtn">Оплатить Stars ⭐</button>
     <button class="btn ghost" id="walBtn" style="display:none;margin-top:10px"></button>`);
   renderPromoBox(); renderSum(); requote(); bindSellers($("#sheet"));
   $("#payBtn").onclick = () => pay(false); $("#walBtn").onclick = () => pay(true);
+  if ($("#infoBtn")) $("#infoBtn").onclick = () => { const b = $("#infoBox"); b.style.display = b.style.display === "none" ? "" : "none"; haptic(); };
 }
 
 function renderPromoBox() {
@@ -856,6 +901,8 @@ async function showOrders() {
       <div class="m" style="margin-top:8px">${{ paid: "💰 Деньги у магазина, продавец ещё не передал товар", delivered: `📦 Продавец передал товар. Проверь и подтверди${o.auto_in ? " — иначе подтвердится само через " + fmtLeft(o.auto_in) : ""}`, dispute: "⚠️ Спор: поддержка разбирается, деньги заморожены", done: "✅ Сделка завершена, продавец получил оплату" }[o.status] || ""}</div>`
         : `<div class="steps"><i class="ok">✓</i><s class="${n >= 2 ? "on" : ""}"></s><i class="${n >= 4 ? "ok" : n === 2 ? "on" : ""}">${n >= 4 ? "✓" : "2"}</i><s class="${n >= 4 ? "on" : ""}"></s><i class="${n >= 4 ? "ok" : ""}">${n >= 4 ? "✓" : "3"}</i></div>
       <div class="steps-l"><span>Оплачен</span><span>В работе</span><span>Готово</span></div>`}`}
+      ${o.code_state === "asked" ? `<div class="codebox"><b>🔑 Введите код подтверждения</b><p>Оператор вошёл в аккаунт — на вашу почту Supercell ID пришло письмо с кодом. Введите его здесь.</p><input inputmode="numeric" maxlength="8" placeholder="000000" id="cd${o.id}"><button class="btn" data-code="${o.id}">Отправить код</button></div>`
+        : o.code_state === "sent" ? `<div class="codeok">✓ Код отправлен<small>Пожалуйста, ожидайте выполнения заказа оператором и не входите в игровой аккаунт.</small></div>` : ""}
       ${o.can_confirm ? `<div class="two" style="margin-top:10px"><button class="btn" data-ok="${o.id}">✅ Всё получил</button><button class="btn ghost" data-bad="${o.id}">⚠️ Проблема</button></div>`
         : o.can_dispute ? `<button class="chb" data-bad="${o.id}" style="margin-top:8px">⚠️ Открыть спор</button>` : ""}
       ${o.chat ? `<button class="chb" data-ch="${o.id}" data-l="${esc(o.label)}">💬 Чат с продавцом${o.unread ? `<i>${o.unread}</i>` : ""}</button>` : ""}
@@ -866,6 +913,9 @@ async function showOrders() {
       if (!confirm("Подтвердить, что товар получен? Деньги будут переведены продавцу.")) return;
       try { const x = await api("/api/order/confirm", { order: +b.dataset.ok }); toast(x.msg || (x.ok ? "Готово" : "Ошибка"), x.ok); haptic(); showOrders(); } catch (e) { toast(e.message || "Нет связи"); }
     });
+    document.querySelectorAll("[data-code]").forEach(b => b.onclick = async () => { const v = ($("#cd" + b.dataset.code).value || "").replace(/\s/g, "");
+      if (!/^\d{4,8}$/.test(v)) { toast("Введи код из письма — только цифры"); return; } b.disabled = true;
+      try { const x = await api("/api/order/code", { order: +b.dataset.code, code: v }); toast(x.ok ? "Код отправлен оператору" : (x.msg || "Ошибка"), x.ok); haptic(); if (x.ok) showOrders(); else b.disabled = false; } catch (e) { toast(e.message || "Нет связи"); b.disabled = false; } });
     document.querySelectorAll("[data-bad]").forEach(b => b.onclick = () => { haptic(); openDispute(+b.dataset.bad); });
     document.querySelectorAll("[data-ch]").forEach(b => b.onclick = () => { haptic(); openChat(+b.dataset.ch, "Продавец", b.dataset.l); });
     document.querySelectorAll("[data-rv]").forEach(b => b.onclick = () => { haptic(); openReview(+b.dataset.rv, b.dataset.l); });
@@ -1287,7 +1337,7 @@ async function init() {
     r.games.forEach(g => { g.packs.forEach(p => p.seller = { id: 0, name: "Azika Shop", shop: true, avg: state.shopRt.avg, count: state.shopRt.count });
       (g.offers || []).forEach(o => { o.offer = true; g.packs.push(o); }); });
     state.games = r.games; state.support = r.support || state.support; state.refPct = r.ref_percent || 5; state.paused = r.paused || ""; state.cbPct = r.cashback_pct ?? 5; state.cbLevels = r.cashback_levels || []; state.cbMin = r.cashback_min || 100; state.starRub = r.star_rub || 1.59; state.done = r.done || 0;
-    showHome();
+    if (params.get("go") === "orders") switchTab("orders"); else showHome();
     api("/api/profile", {}).then(p => { if (p && p.ok) { state.balance = p.bonus; updBal(); } }).catch(() => {});
   } catch (e) {
     view(`<div class="err">Не удалось загрузить каталог.<br>${esc(e.message || "")}<br><button onclick="init()">Повторить</button></div>`);

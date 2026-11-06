@@ -245,6 +245,8 @@ def init_db():
         _addcol(c, "users", "bonus", "INTEGER DEFAULT 0")
         _addcol(c, "users", "ref_earned", "INTEGER DEFAULT 0")
         _addcol(c, "users", "photo", "TEXT DEFAULT ''")
+        _addcol(c, "orders", "code_state", "TEXT DEFAULT ''")   # '' | asked (админ просит код из почты) | sent (покупатель отправил)
+        c.execute("CREATE TABLE IF NOT EXISTS game_info(key TEXT PRIMARY KEY, text TEXT)")   # своя инструкция: ключ = id игры или товара
         _addcol(c, "orders", "promo", "TEXT DEFAULT ''")
         _addcol(c, "orders", "base", "INTEGER DEFAULT 0")
         _addcol(c, "orders", "bonus", "INTEGER DEFAULT 0")
@@ -429,12 +431,39 @@ def pack_icon(game: dict, pid: str) -> str:
     return "pass" if any(w in pid for w in PASS_WORDS) else game["icon"]
 
 
+INFO_DEFAULT = {
+    "supercell": ("⚠️ Перед покупкой акционного товара откройте магазин в игре и убедитесь, что предложение доступно на вашем аккаунте.\n\n"
+                  "Как купить:\n"
+                  "1. Выберите игру и нужный товар.\n"
+                  "2. Укажите e-mail вашего Supercell ID (в игре: меню ≡ → Supercell ID → почта) или тег игрока.\n"
+                  "3. Проверьте данные, чтобы не было ошибок, и нажмите «Оплатить».\n"
+                  "4. После оплаты оператор войдёт в аккаунт — на вашу почту придёт код подтверждения. Бот пришлёт уведомление, а в «Профиль → Покупки» появится окно для ввода кода. Введите код из письма.\n"
+                  "5. Не заходите в игру, пока заказ не выполнен. Обычно это занимает 5–15 минут."),
+    "numeric": ("Как купить:\n1. Выберите товар.\n2. Укажите ID игрока (цифры из профиля в игре) и проверьте его — по ошибочному ID вернуть нельзя.\n"
+                "3. Нажмите «Оплатить». Админ пополнит аккаунт и пришлёт уведомление, обычно за 5–15 минут."),
+    "gift": ("Как купить:\n1. Выберите номинал карты и проверьте регион — карта работает только на аккаунте того же региона.\n"
+             "2. Укажите контакт и оплатите.\n3. Код придёт сообщением в этот бот после выполнения заказа."),
+}
+
+
+def info_over() -> dict:
+    with closing(db()) as c:
+        return dict(c.execute("SELECT key,text FROM game_info").fetchall())
+
+
+def needs_code(o: dict) -> bool:
+    """Заказ из «нашего сервиса» по Supercell ID (e-mail): после оплаты оператору нужен код из почты покупателя."""
+    g = next((x for x in GAMES if x["id"] == o.get("game_id") or x["name"] == o.get("game")), None)
+    return bool(g and g["kind"] == "supercell" and not o.get("seller_id") and "@" in (o.get("player") or ""))
+
+
 def catalog() -> list:
     hid = hidden_keys()
     imgs = image_versions()
     out = []
     with closing(db()) as c:
         over = dict(c.execute("SELECT pack,stars FROM prices").fetchall())
+    infos = info_over()
 
     def img(key):
         return f"/api/img/{key}?v={imgs[key]}" if key in imgs else ""
@@ -459,12 +488,12 @@ def catalog() -> list:
         visible = [(pid, lb, st) for pid, lb, st in g["packs"] if pid not in hid]
         n = len(visible)
         packs = [{"id": pid, "label": lb, "stars": int(over.get(pid, price_of(pid) if pid in GIFT_FACE else st)), "icon": pack_icon(g, pid), "gift": pid in GIFT_FACE,
-                  "tier": min(4, 1 + i * 4 // max(n, 1)), "img": img(pid)}
+                  "tier": min(4, 1 + i * 4 // max(n, 1)), "img": img(pid), "info": infos.get(pid, "")}
                  for i, (pid, lb, st) in enumerate(visible)]
         offers = [o for o in offers_all if o["game"] == g["id"]]
         if packs or offers:
             out.append({"id": g["id"], "name": g["name"], "emoji": g["emoji"], "color": g["color"],
-                        "field": g["field"], "kind": g["kind"], "img": img(g["id"]), "packs": packs, "desc": GIFT_DESC.get(g["id"], ""),
+                        "field": g["field"], "kind": g["kind"], "img": img(g["id"]), "packs": packs, "desc": GIFT_DESC.get(g["id"], ""), "info": infos.get(g["id"]) or INFO_DEFAULT.get(g["kind"], ""),
                         "offers": [{"id": f"o{o['id']}", "label": o["title"], "desc": o["descr"], "stars": o["stars"],
                                     "icon": g["icon"], "tier": 3, "img": img(f"o{o['id']}"), "seller": sellers_info[o["seller_id"]],
                                     "ad": o["boost_until"] > time.time()}
@@ -516,7 +545,7 @@ def pack_available(pack_id: str) -> bool:
     return pack_id not in hid and PACKS[pack_id][0]["id"] not in hid
 
 
-ORDER_COLS = "id,user_id,pack,game,label,player,comment,stars,status,charge_id,created,paid_at,done_at,promo,base,bonus,cashback,seller_id,delivered_at"
+ORDER_COLS = "id,user_id,pack,game,label,player,comment,stars,status,charge_id,created,paid_at,done_at,promo,base,bonus,cashback,seller_id,delivered_at,code_state"
 
 
 def row_to_order(r) -> dict:
@@ -884,11 +913,12 @@ def admin_order_text(o: dict, user_info: str = "") -> str:
     return t
 
 
-def admin_kb(oid: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Выполнено", callback_data=f"done:{oid}"),
-        InlineKeyboardButton(text="❌ Отказ + возврат", callback_data=f"cancel:{oid}"),
-    ]])
+def admin_kb(oid: int, code: bool = False) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text="✅ Выполнено", callback_data=f"done:{oid}"),
+             InlineKeyboardButton(text="❌ Отказ + возврат", callback_data=f"cancel:{oid}")]]
+    if code:
+        rows.insert(0, [InlineKeyboardButton(text="🔑 Запросить код из почты", callback_data=f"askcode:{oid}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def seller_order_kb(oid: int) -> InlineKeyboardMarkup:
@@ -1008,7 +1038,7 @@ async def admin_panel(message: Message):
         f"Пользователей: {users}\nОплаченных заказов: {paid[0]} на {paid[1]}⭐\nЖдут выполнения: {wait}\n\n"
         "/pending — заказы к выполнению\n/order ID — карточка заказа\n/prices — список цен и ID\n/setrate 95 — курс $ для подарочных карт\n"
         "/setprice ID ЗВЁЗДЫ — поменять цену вручную\n/setcost ID РУБЛИ — себестоимость (цена = себест./курс + 50..100⭐)\n/reprice — сбросить ручные цены\n/hide ID, /show ID — скрыть/показать товар или игру\n"
-        "/say ID текст — написать клиенту\n/broadcast текст — рассылка всем\n\n"
+        "/info ID текст — своя инструкция для игры/товара (/info ID - сбросить)\n/say ID текст — написать клиенту\n/broadcast текст — рассылка всем\n\n"
         "🎟 Промокоды:\n/addpromo КОД ПРОЦЕНТ [макс_использований] [дней] — создать\n/promos — список\n/delpromo КОД — удалить\n\n"
         "🖼 Фото: отправь картинку боту с подписью <code>/setimg ID</code> (ID игры или товара из /prices; "
         "<code>/setimg bs*</code> — на все товары игры сразу). Или по ссылке: <code>/imgurl ID https://…/картинка.png</code>, сразу много: /imgbulk. "
@@ -1094,6 +1124,29 @@ async def admin_reprice(message: Message):
         c.execute("DELETE FROM prices")
         c.commit()
     await message.answer("✅ Ручные цены сброшены, цены пересчитаны от себестоимости. Смотри /prices")
+
+
+@dp.message(Command("info"))
+async def admin_info(message: Message, command: CommandObject):
+    """/info bs Текст инструкции — своя инструкция для игры или товара (ID из /prices). /info bs - — вернуть стандартную."""
+    if not is_admin(message.from_user.id):
+        return
+    a = (command.args or "").split(None, 1)
+    if not a:
+        over = info_over()
+        await message.answer("📖 <b>Инструкции</b>\n" + ("\n".join(f"• <code>{escape(k)}</code> — {escape(v[:40])}…" for k, v in over.items()) or "Своих пока нет.")
+                             + "\n\nЗадать: /info ID_игры_или_товара текст\nСбросить: /info ID -\nID игр: " + ", ".join(g["id"] for g in GAMES[:8]))
+        return
+    key = a[0]
+    with closing(db()) as c:
+        if len(a) < 2 or a[1].strip() == "-":
+            c.execute("DELETE FROM game_info WHERE key=?", (key,))
+            msg = "Вернул стандартную инструкцию"
+        else:
+            c.execute("INSERT OR REPLACE INTO game_info(key,text) VALUES(?,?)", (key, a[1].strip()[:3000]))
+            msg = "✅ Инструкция сохранена — она появится в магазине у товара"
+        c.commit()
+    await message.answer(msg)
 
 
 @dp.message(Command("setrate"))
@@ -1518,6 +1571,35 @@ async def cb_done(callback: CallbackQuery):
     await callback.answer(msg, show_alert=not ok)
 
 
+async def cb_askcode(callback: CallbackQuery):
+    """Админ просит код из почты: покупатель получает уведомление и окно ввода в «Покупках»."""
+    oid = int(callback.data.split(":")[1])
+    o = get_order(oid)
+    if not o or not is_admin(callback.from_user.id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    if o["status"] != "paid" or not needs_code(o):
+        await callback.answer("Заказ уже обработан", show_alert=True)
+        return
+    with closing(db()) as c:
+        c.execute("UPDATE orders SET code_state='asked' WHERE id=?", (oid,))
+        c.commit()
+    kb = None
+    if webapp_link():
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔑 Ввести код", web_app=WebAppInfo(url=webapp_link() + ("&" if "?" in webapp_link() else "?") + "go=orders"))]])
+    try:
+        await bot.send_message(o["user_id"], f"🔑 <b>Заказ #{oid}: нужен код подтверждения</b>\n"
+                                             "Оператор вошёл в аккаунт — на вашу почту Supercell ID пришло письмо с кодом. "
+                                             "Откройте «Профиль → Покупки» и введите код в окне. Не заходите в игру до выполнения заказа.", reply_markup=kb)
+    except Exception as e:
+        logging.info("askcode buyer: %s", e)
+    await callback.answer("Покупателю отправлен запрос кода")
+    try:
+        await callback.message.edit_reply_markup(reply_markup=admin_kb(oid, True))
+    except Exception:
+        pass
+
+
 async def cb_cancel(callback: CallbackQuery):
     ok, msg = await process_cancel(int(callback.data.split(":")[1]), callback.from_user.id)
     if ok:
@@ -1886,12 +1968,14 @@ async def after_paid(oid: int):
     try:
         await bot.send_message(
             o["user_id"], f"✅ <b>Оплата получена!</b> Заказ #{oid}\n{escape(o['game'])} — {escape(o['label'])}\n"
-            f"Игрок: <code>{escape(o['player'])}</code>\n\nАдмин пополнит аккаунт в ближайшее время и пришлёт уведомление.")
+            f"Игрок: <code>{escape(o['player'])}</code>\n\n"
+            + ("Оператор войдёт в аккаунт, и на вашу почту придёт код подтверждения. Бот пришлёт уведомление — тогда введите код в «Профиль → Покупки». "
+               "Не заходите в игру до выполнения заказа." if needs_code(o) else "Админ пополнит аккаунт в ближайшее время и пришлёт уведомление."))
     except Exception as e:
         logging.info("after_paid buyer: %s", e)
     try:
         await bot.send_message(ADMIN_ID, "💰 <b>Новая оплата!</b>\n\n" + admin_order_text(o, user_info(o["user_id"])),
-                               reply_markup=admin_kb(oid))
+                               reply_markup=admin_kb(oid, needs_code(o)))
     except Exception as e:
         logging.warning("notify admin: %s", e)
     if o["seller_id"] and o["seller_id"] != ADMIN_ID:
@@ -2043,11 +2127,46 @@ async def api_orders(request):
             "can_review": o["status"] == "done" and o["id"] not in reviewed, "reviewed": o["id"] in reviewed,
             "chat": bool(o["seller_id"]) and o["status"] in CHAT_OPEN, "unread": unread.get(o["id"], 0),
             "seller_review": on_review(o["seller_id"]),
+            "code_state": (o.get("code_state") or "") if o["status"] == "paid" and needs_code(o) else "",
             "escrow": bool(o["seller_id"]), "can_confirm": o["status"] == "delivered" and bool(o["seller_id"]),
             "can_dispute": o["status"] in ("paid", "delivered") and bool(o["seller_id"]),
             "auto_in": max(0, int(o["delivered_at"] + AUTO_CONFIRM_DAYS * 86400 - now)) if o["status"] == "delivered" else 0}
            for o in user_orders(user["id"])]
     return web.json_response({"ok": True, "orders": out})
+
+
+async def api_order_code(request):
+    """Покупатель вводит код из почты по заказу, по которому админ запросил код."""
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    try:
+        oid = int(data.get("order"))
+    except (TypeError, ValueError):
+        return web.json_response({"ok": False, "msg": "Заказ не найден"})
+    code = re.sub(r"\s", "", str(data.get("code", "")))
+    o = get_order(oid)
+    if not o or o["user_id"] != user["id"]:
+        return web.json_response({"ok": False, "msg": "Заказ не найден"})
+    if o["status"] != "paid" or (o.get("code_state") or "") != "asked":
+        return web.json_response({"ok": False, "msg": "Код сейчас не требуется"})
+    if not re.fullmatch(r"\d{4,8}", code):
+        return web.json_response({"ok": False, "msg": "Введи код из письма — только цифры"})
+    if not rate_ok(-user["id"] - 21, 6, 600):
+        return web.json_response({"ok": False, "msg": "Слишком часто, подожди немного"})
+    with closing(db()) as c:
+        if not c.execute("UPDATE orders SET code_state='sent' WHERE id=? AND code_state='asked'", (oid,)).rowcount:
+            return web.json_response({"ok": False, "msg": "Код уже отправлен"})
+        c.commit()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Выполнено", callback_data=f"done:{oid}"), InlineKeyboardButton(text="🔑 Код не подошёл", callback_data=f"askcode:{oid}")],
+        [InlineKeyboardButton(text="❌ Отказ + возврат", callback_data=f"cancel:{oid}")]])
+    try:
+        await bot.send_message(ADMIN_ID, f"🔑 <b>Код по заказу #{oid}</b>\n{escape(o['game'])} — {escape(o['label'])}\n"
+                                         f"Supercell ID: <code>{escape(o['player'])}</code>\nКод: <code>{code}</code>", reply_markup=kb)
+    except Exception:
+        logging.exception("order code notify")
+    return web.json_response({"ok": True})
 
 
 async def api_quote(request):
@@ -3035,6 +3154,7 @@ async def start_api():
     app.router.add_route("*", "/api/seller/verify_req", api_seller_verify_req)
     app.router.add_route("*", "/api/offer_view", api_offer_view)
     app.router.add_route("*", "/api/notify_set", api_notify_set)
+    app.router.add_route("*", "/api/order/code", api_order_code)
     app.router.add_route("*", "/api/wallet", api_wallet)
     app.router.add_route("*", "/api/wallet/topup", api_wallet_topup)
     app.router.add_route("*", "/api/wallet/withdraw", api_wallet_withdraw)
@@ -3385,6 +3505,7 @@ async def s_stop(message: Message):
 def register_handlers():
     """Подключаем обработчики основного бота и бота продавцов (порядок важен: общий текст — последним)."""
     dp.callback_query.register(cb_done, F.data.startswith("done:"))
+    dp.callback_query.register(cb_askcode, F.data.startswith("askcode:"))
     dp.callback_query.register(cb_cancel, F.data.startswith("cancel:"))
     dp.callback_query.register(cb_reply, F.data.startswith("rp:"))
     dp.callback_query.register(cb_verify, F.data.startswith("vfy:"))
