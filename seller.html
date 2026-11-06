@@ -168,10 +168,14 @@ input.f:focus,textarea.f:focus{border-color:var(--a1)}textarea.f{resize:none;hei
 .idl{display:flex;align-items:center;gap:6px;margin-top:4px;font-weight:800}.idl .st{color:var(--gold);letter-spacing:1px}.idl a{color:var(--a2);cursor:pointer}
 .wbal{background:var(--grad);border-radius:20px;padding:18px;color:#fff;margin-bottom:14px;box-shadow:0 12px 26px rgba(192,38,211,.35)}
 .wbal small{opacity:.8;font-weight:700;font-size:12px}.wbal b{display:block;font:800 32px Manrope,sans-serif;margin-top:4px}
-.chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.chips button{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:99px;padding:8px 14px;font:700 13px Manrope,sans-serif;cursor:pointer}
+.qch{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.qch button{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:99px;padding:8px 14px;font:700 13px Manrope,sans-serif;cursor:pointer}
 .hrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.hrow .ic{width:38px;height:38px;border-radius:12px;background:var(--card);display:grid;place-items:center;font-size:18px;flex:none}
 .hrow .tx{flex:1;min-width:0}.hrow .tx b{display:block;font-size:14px}.hrow .tx span{font-size:12px;color:var(--muted)}.hrow .am{text-align:right;font:800 14px Manrope,sans-serif}.hrow .am.p{color:#34d399}.hrow .am i{display:block;font-style:normal;font-weight:600;font-size:11px;color:var(--muted)}
 .bkp{border:0;background:var(--card);color:var(--text);border-radius:99px;padding:9px 16px;font:800 14px Manrope,sans-serif;margin:0 0 12px;cursor:pointer}.mnr{display:flex;align-items:center;gap:14px;padding:15px 4px;border-bottom:1px solid var(--line);cursor:pointer}.mnr .mi{width:38px;height:38px;border-radius:12px;background:var(--card2);display:grid;place-items:center;font-size:18px;flex:none}.mnr b{flex:1;font-size:15px}.mnr i{color:var(--muted);font-style:normal}.mnr.nsw{cursor:default}.ntgl{width:46px;height:28px;border-radius:99px;background:var(--line);position:relative;flex:none;cursor:pointer;transition:background .2s;border:0}.ntgl:after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s}.ntgl.on{background:var(--grad)}.ntgl.on:after{transform:translateX(18px)}
+.prow2{display:flex;gap:8px;align-items:center;margin:0 0 14px}.pls.ptabs{display:flex;gap:8px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px 0}.pls.ptabs::-webkit-scrollbar{display:none}
+.pls.ptabs button{flex:none;border:0;border-radius:99px;padding:13px 20px;font:800 15px Manrope,sans-serif;background:var(--card);color:var(--text);border:1px solid var(--line);cursor:pointer;white-space:nowrap}.pls.ptabs button.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 8px 18px rgba(192,38,211,.4)}
+.hbg{flex:none;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center}
+.prow2 .pls{flex:1;min-width:0;margin:0}.hbg{background:var(--card2)}
 </style>
 </head>
 <body>
@@ -558,7 +562,7 @@ async function showMoney() {
       <div><h3>${esc(nm)} ${me.verified ? '<span class="ck">✓</span>' : ""}</h3><p>${u.username ? "@" + esc(u.username) + " · " : ""}ID ${me.id}</p><div class="lvrow"><button class="lvl ${store("lvl_seen2") ? "" : "pulse"}" id="lvl">⚡ ${esc(L.cur.name)} <small>· ${L.cur.fee}%</small> ›</button>${store("lvl_seen2") ? "" : '<span class="tapme">👈 нажми</span>'}</div></div></div>
     ${me.review ? '<div class="note" style="margin:0 0 12px;background:rgba(255,200,61,.14);color:var(--gold);font-size:13px">🔍 <b>Твой аккаунт на проверке.</b> Товары временно скрыты из магазина, новые покупки закрыты. Уже оплаченные заказы выполняй как обычно. Напиши администрации во вкладке «Чаты».</div>' : ""}
     <div class="wal" id="wal2"><div class="wi">💰</div><div style="flex:1"><b>${me.balance} ⭐</b><small>доступно к выплате${me.escrow ? ` · в сделках ${me.escrow} ⭐` : ""}${me.pending_payout ? ` · на выводе ${me.pending_payout} ⭐` : ""}</small></div><i>›</i></div>
-    <div class="pls"><button id="pOff">Мои товары</button><button id="pOrd">Продажи</button><button id="pRev">Отзывы</button><button id="pMnu">☰ Меню</button></div>
+    <div class="prow2"><div class="pls"><button id="pOff">Мои товары</button><button id="pOrd">Продажи</button></div><button class="hbg" id="pMnu" aria-label="Меню">☰</button></div>
     <div class="card"><h4>Мой профиль</h4><div class="kv"><div><b>${me.deals}</b><span>сделок</span></div><div><b>${me.reviews ? "★ " + me.avg : "—"}</b><span>рейтинг</span></div><div><b>${me.reviews}</b><span>отзывов</span></div></div>
       ${verifyBlock(me)}
       <button class="btn ghost" id="rv">⭐ Мои отзывы</button></div>
@@ -570,7 +574,7 @@ async function showMoney() {
   $("#wal2").onclick = () => { haptic(); balanceScreen("out"); };
   $("#pOff").onclick = () => { haptic(); S.dir = -1; S.tab = "offers"; go(); };
   $("#pOrd").onclick = () => { haptic(); S.dir = 1; S.tab = "orders"; go(); };
-  $("#pRev").onclick = openReviews; $("#pMnu").onclick = () => { haptic(); menuSheet(me, nm); };
+  $("#pMnu").onclick = () => { haptic(); menuSheet(me, nm); };
   $("#sup").onclick = () => { const u = "https://t.me/" + (S.support || "@azikashop_support_bot").replace(/^@/, "") + "?start=seller"; tg && tg.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); };
   $("#rv").onclick = openReviews;
   if ($("#vreq")) $("#vreq").onclick = async () => { $("#vreq").disabled = true;
@@ -678,7 +682,7 @@ async function balanceScreen(tab) {
     const body = tab === "in"
       ? `<div class="wbal"><small>Баланс для покупок</small><b>${w.wallet} ⭐</b></div>
          <div class="row"><label>СУММА ПОПОЛНЕНИЯ, ⭐</label><input class="f" id="tpS" inputmode="numeric" placeholder="от ${w.min} до ${w.max}"></div>
-         <div class="chips">${[100, 250, 500, 1000].map(n => `<button data-n="${n}">${n}</button>`).join("")}</div>
+         <div class="qch">${[100, 250, 500, 1000].map(n => `<button data-n="${n}">${n}</button>`).join("")}</div>
          <button class="btn" id="tpGo">Пополнить баланс</button>
          <p class="note" style="margin:12px 0">Пополнение идёт через Telegram Stars. Баланс можно потратить на покупки в магазине. Вывести его нельзя — выводится только заработок продавца.</p>
          <div class="pls sm" style="margin-top:6px"><button data-f="all" class="${flt === "all" ? "on" : ""}">Все</button><button data-f="in" class="${flt === "in" ? "on" : ""}">Пополнения</button><button data-f="buy" class="${flt === "buy" ? "on" : ""}">Покупки</button></div>`
@@ -690,7 +694,7 @@ async function balanceScreen(tab) {
     { const m = $("#cf .cfm"); m.style.overflowY = "auto"; m.style.display = "block"; m.style.paddingBottom = "40px"; } $("#cf .cfm").innerHTML = `<div class="pls"><button data-t="in" class="${tab === "in" ? "on" : ""}">Пополнение</button><button data-t="out" class="${tab === "out" ? "on" : ""}">Выплата</button></div>${body}<h4 style="margin:16px 0 0">История</h4><div id="hist">${rows()}</div>`;
     document.querySelectorAll("#cf [data-t]").forEach(b => b.onclick = () => { haptic(); tab = b.dataset.t; draw(); });
     document.querySelectorAll("#cf [data-f]").forEach(b => b.onclick = () => { flt = b.dataset.f; draw(); });
-    document.querySelectorAll("#cf .chips button").forEach(b => b.onclick = () => { $("#tpS").value = b.dataset.n; haptic(); });
+    document.querySelectorAll("#cf .qch button").forEach(b => b.onclick = () => { $("#tpS").value = b.dataset.n; haptic(); });
     if ($("#tpGo")) $("#tpGo").onclick = async () => {
       const n = +$("#tpS").value.replace(/\D/g, ""); if (!n) { toast("Введи сумму"); return; }
       try { const r = await api("/api/wallet/topup", {stars: n}); if (!r.ok) { toast(r.msg || "Ошибка"); return; }
