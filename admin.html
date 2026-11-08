@@ -88,6 +88,11 @@ button{transition:transform .12s,background .2s,opacity .2s}
 .tg:active::before{filter:brightness(1.15)}
 .ib{width:42px;height:42px;padding:0;border-radius:13px;flex:none;font-size:17px}
 .onl{color:#2ee6a6;font-weight:700}.onl::first-letter{animation:onl 1.6s infinite}@keyframes onl{50%{opacity:.35}}
+.bch{display:flex;align-items:flex-end;gap:3px;height:110px;margin:6px 0 4px}.bch i{flex:1;min-width:2px;border-radius:5px 5px 2px 2px;background:var(--ac);opacity:.9;position:relative;min-height:2px}.bch i.z{opacity:.25}
+.bchl{display:flex;justify-content:space-between;font-size:11px;color:var(--mu);font-weight:700;margin-bottom:10px}
+.kp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.kp>div{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:12px}.kp b{display:block;font-size:20px;font-weight:800}.kp span{font-size:11.5px;color:var(--mu);font-weight:700}
+.hb{margin:8px 0}.hb .t{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:4px;gap:8px}.hb .t span:last-child{color:var(--mu);white-space:nowrap}.hb .b{height:8px;border-radius:99px;background:var(--line);overflow:hidden}.hb .b i{display:block;height:100%;border-radius:99px;background:var(--ac)}
+.sth{font-size:12px;font-weight:800;color:var(--mu);margin:16px 0 4px;letter-spacing:.3px}
 </style>
 </head>
 <body>
@@ -196,9 +201,22 @@ function openSeller(s) {
   if ($("#revon")) $("#revon").onclick = () => reviewSheet(s, true);
   if ($("#revoff")) $("#revoff").onclick = () => reviewSheet(s, false);
   document.querySelectorAll("#sh [data-a]").forEach(b => b.onclick = async () => {
-    const a = b.dataset.a, j = await api("seller_act", { id: s.id, act: a, text: "" });
+    const a = b.dataset.a; if (a === "unverify") return unverSheet(s);
+    const j = await api("seller_act", { id: s.id, act: a, text: "" });
     if (j.ok) { haptic("medium"); toast(j.msg); loadSellers(); if (j.seller) openSeller(j.seller); }
   });
+}
+
+function unverSheet(s) {
+  sheet(`<div class="t" style="font-size:17px">⚠️ Снять галочку</div>
+  <div class="mu" style="margin-top:4px">${esc(s.name)} · продавец получит сообщение об отзыве галочки в Telegram${""}</div>
+  <textarea id="uvt" rows="4" maxlength="500" placeholder="Причина (необязательно): например, жалобы покупателей" style="margin-top:12px"></textarea>
+  <div class="btns"><button class="f" id="uvc">Отмена</button><button class="pr f" id="uvg">Снять и отправить</button></div>
+  <button class="f" style="width:100%;margin-top:8px" id="uvq">Снять без причины</button>`);
+  $("#uvc").onclick = () => openSeller(s);
+  const go = async text => { const j = await api("seller_act", { id: s.id, act: "unverify", text }); if (j.ok) { haptic("medium"); toast(j.msg); loadSellers(); if (j.seller) openSeller(j.seller); } else toast(j.msg || "Ошибка"); };
+  $("#uvg").onclick = () => go($("#uvt").value.trim() || "-");
+  $("#uvq").onclick = () => go("-");
 }
 
 function reviewSheet(s, on) {
@@ -291,6 +309,32 @@ function newPromo() {
   };
 }
 
+
+function statBars(arr, key, lbl) {
+  const mx = Math.max(1, ...arr.map(x => x[key]));
+  return `<div class="bch">${arr.map(x => `<i class="${x[key] ? "" : "z"}" style="height:${Math.max(2, Math.round(x[key] / mx * 100))}%" title="${esc(String(x[lbl]))}: ${x[key]}"></i>`).join("")}</div><div class="bchl"><span>${esc(String(arr[0][lbl]))}</span><span>${esc(String(arr[arr.length - 1][lbl]))}</span></div>`;
+}
+function statHb(items, nameK, valK, cntK, unit) {
+  const mx = Math.max(1, ...items.map(x => x[valK]));
+  return items.map(x => `<div class="hb"><div class="t"><span>${esc(String(x[nameK]))}</span><span>${x[valK]} ${unit}${cntK ? " · " + x[cntK] + " зак." : ""}</span></div><div class="b"><i style="width:${Math.max(3, Math.round(x[valK] / mx * 100))}%"></i></div></div>`).join("");
+}
+
+async function statsSheet(days) {
+  days = days === undefined ? 30 : days;
+  sheet('<div class="empty">Загрузка…</div>');
+  const j = await api("stats", { days }); if (!j.ok || !j.stats || !j.stats.series) return sheet(`<div class="empty">${esc(j.msg || "Нет данных")}</div>`);
+  const r = j.stats, P = [[7, "7 дней"], [30, "30 дней"], [0, "Всё время"]];
+  sheet(`<div class="t" style="font-size:17px">📊 Статистика</div>
+    <div class="seg" style="margin-top:10px">${P.map(([d, t]) => `<button data-d="${d}" class="${d === r.days ? "on" : ""}">${t}</button>`).join("")}</div>
+    <div class="kp"><div><b>${r.turnover}⭐</b><span>оборот · ${r.orders} заказов</span></div><div><b>${r.commission}⭐</b><span>комиссия с продавцов ≈</span></div><div><b>${r.own}⭐</b><span>твои товары</span></div><div><b>${r.sellers_turn}⭐</b><span>товары продавцов</span></div>
+      <div><b>${r.avg}⭐</b><span>средний чек</span></div><div><b>+${r.users_new}</b><span>новых из ${r.users}</span></div><div><b>${r.refunds} / ${r.disputes}</b><span>возвраты / споры</span></div><div><b>${r.sellers}</b><span>продавцов · ✓ ${r.verified}</span></div>
+      <div><b>${r.payouts_pending.stars}⭐</b><span>выплат в очереди (${r.payouts_pending.n})</span></div><div><b>${r.payouts_paid}⭐</b><span>выплачено · комиссия вывода ${r.wallet_fees}⭐</span></div><div><b>${r.wallet_float}⭐</b><span>на балансах покупателей</span></div><div><b>${r.topups}⭐</b><span>пополнений за период</span></div></div>
+    <div class="sth">ОБОРОТ ПО ДНЯМ, ⭐</div>${statBars(r.series, "stars", "d")}
+    <div class="sth">ТОП ИГР</div>${r.top_games.length ? statHb(r.top_games, "game", "stars", "n", "⭐") : '<div class="mu">Нет продаж</div>'}
+    <div class="sth">ТОП ПРОДАВЦОВ</div>${r.top_sellers.length ? statHb(r.top_sellers, "name", "stars", "n", "⭐") : '<div class="mu">Нет продаж</div>'}`);
+  document.querySelectorAll("#sh [data-d]").forEach(b => b.onclick = () => { haptic(); statsSheet(+b.dataset.d); });
+}
+
 /* ---------- Ещё ---------- */
 async function viewMore() {
   V(`<div class="empty">Загрузка…</div>`);
@@ -298,11 +342,12 @@ async function viewMore() {
   counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge();
   const s = j.stats.shop, v = j.stats.vpn, p = j.pause;
   const sw = (k, ic, n, st) => st === null ? "" : `<div class="card ctl ${st ? "off" : ""}"><div class="row"><span class="ico">${ic}</span><div class="grow"><div class="t" style="font-size:17px">${n}</div><div class="mu">${st ? "Продажи приостановлены" : "Продажи идут"}</div></div></div><div data-sw="${k}">${tg2(st, "▶ Работает", "⏸ Стоп")}</div></div>`;
-  V(`<div class="sec">Продажи</div>${sw("shop", "🛍", "Azika Shop", p.shop)}${sw("vpn", "🔐", "Azika VPN", p.vpn)}
+  V(`<button class="f" style="width:100%;margin-bottom:12px" id="stbtn">📊 Статистика</button><div class="sec">Продажи</div>${sw("shop", "🛍", "Azika Shop", p.shop)}${sw("vpn", "🔐", "Azika VPN", p.vpn)}
   <div class="card"><div class="lbl" style="margin-top:0">Сообщение покупателям на время паузы</div><textarea id="pm" rows="2" maxlength="200">${esc(p.msg)}</textarea><button class="f" style="width:100%;margin-top:10px" id="pmb">Сохранить текст</button></div>
   <div class="btns" style="margin-top:0;margin-bottom:12px"><button class="no f" data-sa="1">⏸ Остановить всё</button><button class="ok f" data-sa="0">▶ Запустить всё</button></div>
   ${s ? `<div class="sec">Шоп</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${s.users}</b></div><div><span class="mu">Сегодня</span><b>${s.today}</b><span class="mu">${s.today_stars}⭐</span></div><div><span class="mu">Всего оплат</span><b>${s.paid}</b><span class="mu">${s.paid_stars}⭐</span></div><div><span class="mu">Ждут выдачи</span><b>${s.wait}</b></div><div><span class="mu">Споры</span><b>${s.disputes}</b></div><div><span class="mu">Продавцов</span><b>${s.sellers}</b><span class="mu">блок ${s.sellers_banned}</span></div></div>` : ""}
   ${v ? `<div class="sec">VPN</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${v.users}</b></div><div><span class="mu">Активных</span><b>${v.active}</b></div><div><span class="mu">Оплат</span><b>${v.payments}</b></div><div><span class="mu">Сегодня</span><b>${v.payments_today}</b></div></div>` : ""}`);
+  $("#stbtn").onclick = () => { haptic(); statsSheet(); };
   document.querySelectorAll("[data-sw]").forEach(d => d.onclick = async () => {
     const t = d.firstChild, on = flip(t, d.closest(".card")), r = await api("pause", { which: d.dataset.sw, on }); if (r.ok) { toast(on ? "Продажи остановлены" : "Продажи запущены"); setTimeout(viewMore, 380); } else viewMore();
   });

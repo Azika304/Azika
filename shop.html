@@ -367,6 +367,11 @@ textarea.f{resize:none;height:58px}
 .qs-w .qa.l{left:-6px}.qs-w .qa.r{right:-6px}.qs-w .qs-g .qa{top:40%}
 .me .hbg{width:40px;height:40px;font-size:18px}.me .tapme{display:none}
 .chv{display:flex;align-items:center;justify-content:space-between;cursor:pointer}.chvb{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:20px;line-height:1;cursor:pointer;transition:transform .25s;transform:rotate(-90deg);display:grid;place-items:center;padding:0}.chvb.open{transform:rotate(0)}
+.bch{display:flex;align-items:flex-end;gap:3px;height:110px;margin:6px 0 4px}.bch i{flex:1;min-width:2px;border-radius:5px 5px 2px 2px;background:var(--grad,#7c5cff);opacity:.9;position:relative;min-height:2px}.bch i.z{opacity:.25}
+.bchl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:10px}
+.kp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.kp>div{background:var(--card2,var(--card));border:1px solid var(--line);border-radius:16px;padding:12px}.kp b{display:block;font-size:20px;font-weight:800}.kp span{font-size:11.5px;color:var(--muted);font-weight:700}
+.hb{margin:8px 0}.hb .t{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:4px;gap:8px}.hb .t span:last-child{color:var(--muted);white-space:nowrap}.hb .b{height:8px;border-radius:99px;background:var(--line);overflow:hidden}.hb .b i{display:block;height:100%;border-radius:99px;background:var(--grad,#7c5cff)}
+.sth{font-size:12px;font-weight:800;color:var(--muted);margin:16px 0 4px;letter-spacing:.3px}
 </style>
 </head>
 <body>
@@ -569,6 +574,25 @@ function accSheet(gid) {
     state.ids = r.ids || {}; state.qv = null; closeSheet(); toast(v ? "Сохранено" : "Удалено", true); const a = $("#accs"); if (a) { a.innerHTML = accRows(state.ids); a.querySelectorAll("[data-acc]").forEach(r => r.onclick = () => { haptic(); accSheet(r.dataset.acc); }); } } catch (e) { toast("Нет связи"); } };
   $("#accS").onclick = () => save($("#accV").value.trim());
   if ($("#accD")) $("#accD").onclick = () => save("");
+}
+
+
+function statBars(arr, key, lbl) {
+  const mx = Math.max(1, ...arr.map(x => x[key]));
+  return `<div class="bch">${arr.map(x => `<i class="${x[key] ? "" : "z"}" style="height:${Math.max(2, Math.round(x[key] / mx * 100))}%" title="${esc(String(x[lbl]))}: ${x[key]}"></i>`).join("")}</div><div class="bchl"><span>${esc(String(arr[0][lbl]))}</span><span>${esc(String(arr[arr.length - 1][lbl]))}</span></div>`;
+}
+function statHb(items, nameK, valK, cntK, unit) {
+  const mx = Math.max(1, ...items.map(x => x[valK]));
+  return items.map(x => `<div class="hb"><div class="t"><span>${esc(String(x[nameK]))}</span><span>${x[valK]} ${unit}${cntK ? " · " + x[cntK] + " зак." : ""}</span></div><div class="b"><i style="width:${Math.max(3, Math.round(x[valK] / mx * 100))}%"></i></div></div>`).join("");
+}
+
+async function statsScreen() {
+  fullOpen('<div><h3>Моя статистика</h3></div>', '<div class="sk" style="height:140px"></div>');
+  let r; try { r = await api("/api/stats", {}); if (!r.ok) throw 0; } catch (e) { document.querySelector("#cf .cfm").innerHTML = '<div class="err">Нет связи</div>'; return; }
+  const m = document.querySelector("#cf .cfm"); m.style.overflowY = "auto"; m.style.display = "block"; m.style.padding = "8px 14px 40px";
+  m.innerHTML = `<div class="kp"><div><b>${r.orders}</b><span>заказов</span></div><div><b>${r.spent} ⭐</b><span>потрачено</span></div><div><b>${r.avg} ⭐</b><span>средний чек</span></div><div><b>${r.cashback}</b><span>кэшбэк, баллов</span></div><div><b>${r.saved} ⭐</b><span>сэкономлено скидками</span></div><div><b>${r.topup} ⭐</b><span>пополнено на баланс</span></div></div>
+    <div class="sth">ТРАТЫ ПО МЕСЯЦАМ, ⭐</div>${statBars(r.months, "spent", "label")}
+    <div class="sth">ПО ИГРАМ</div>${r.games.length ? statHb(r.games, "game", "spent", "n", "⭐") : '<p style="color:var(--muted)">Пока нет покупок</p>'}`;
 }
 
 /* ---------- «Мой сервис» на главной: выбор игры, пакет, ID, купить ---------- */
@@ -1188,6 +1212,7 @@ async function showProfile() {
         <div class="stat" id="stOrd" style="cursor:pointer"><b data-n="${p.orders}">0</b><span>заказов ›</span></div>
         <div class="stat"><b data-n="${p.spent}">0</b><span>потрачено ⭐</span></div>
         <div class="stat g"><b data-n="${p.bonus}">0</b><span>баллов</span></div></div>
+      <div class="wrow up" id="stBtn" style="--i:2"><div class="wi">📊</div><div><b>Статистика</b><small>траты по месяцам и играм</small></div><i>›</i></div>
       <div class="card up" style="--i:2"><div class="chv" id="accH"><h4 style="margin:0">🎮 Мои аккаунты</h4><button class="chvb ${store("accs_open") === "0" ? "" : "open"}" id="accT" aria-label="Свернуть">⌄</button></div><p style="margin-top:8px">Сохрани почту Supercell ID или ID игрока — подставим при покупке.</p>
         <div id="accs" style="${store("accs_open") === "0" ? "display:none" : ""}">${accRows(p.ids || {})}</div></div>
       <div class="card up" style="--i:2"><h4>🎟 Промокод</h4><p>${state.promo ? "Активен: " + esc(state.promo.code) + " (−" + state.promo.pct + "%). Применится к следующему заказу." : "Есть промокод? Активируй — скидка применится при оплате."}</p>
@@ -1201,6 +1226,7 @@ async function showProfile() {
     $("#accH").onclick = () => { const a = $("#accs"), t = $("#accT"), open = a.style.display === "none"; a.style.display = open ? "" : "none"; t.classList.toggle("open", open); store("accs_open", open ? "1" : "0"); haptic(); };
     state.ids = p.ids || {}; document.querySelectorAll("#accs [data-acc]").forEach(r => r.onclick = () => { haptic(); accSheet(r.dataset.acc); });
     $("#pcOpen").onclick = openPromo; $("#wal2").onclick = () => { haptic(); balanceScreen("in"); };
+    $("#stBtn").onclick = () => { haptic(); statsScreen(); };
     $("#stOrd").onclick = () => { haptic(); state.sub = "orders"; showOrders(); };
     $("#pMnu").onclick = () => { haptic(); menuSheet(p, nm); };
     $("#ava").onclick = () => { haptic(); openAvatar(p, nm, showProfile); };

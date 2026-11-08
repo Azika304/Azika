@@ -2786,6 +2786,98 @@ async def api_offer_view(request):
     return web.json_response({"ok": True})
 
 
+
+LIVE_PAID = ("paid", "delivered", "dispute", "done")
+RU_MON = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+
+
+def _day_key(ts: float) -> str:
+    return time.strftime("%Y-%m-%d", time.localtime(ts))
+
+
+def _days_back(n: int) -> list:
+    now = time.time()
+    return [_day_key(now - i * 86400) for i in range(n - 1, -1, -1)]
+
+
+async def api_stats(request):
+    """Статистика покупателя: траты по месяцам и играм, кэшбэк, средний чек."""
+    user, _ = await _auth(request)
+    if not user:
+        return _deny()
+    uid = user["id"]
+    q = ",".join("?" * len(LIVE_PAID))
+    with closing(db()) as c:
+        rows = c.execute(f"SELECT game,stars,base,cashback,status,COALESCE(paid_at,created) FROM orders WHERE user_id=? AND status IN ({q})", (uid, *LIVE_PAID)).fetchall()
+        topup = c.execute("SELECT COALESCE(SUM(stars),0) FROM wallet_tx WHERE user_id=? AND kind='topup' AND status='done'", (uid,)).fetchone()[0]
+    n = len(rows)
+    spent = sum(r[1] for r in rows)
+    games, months = {}, {}
+    for g, st, base, cb, status, ts in rows:
+        a = games.setdefault(g, [0, 0]); a[0] += 1; a[1] += st
+        m = months.setdefault(time.strftime("%Y-%m", time.localtime(ts)), [0, 0]); m[0] += 1; m[1] += st
+    keys, now = [], time.localtime()
+    y, mo = now.tm_year, now.tm_mon
+    for _ in range(6):
+        keys.append(f"{y}-{mo:02d}"); mo -= 1
+        if mo == 0:
+            y, mo = y - 1, 12
+    keys.reverse()
+    return web.json_response({
+        "ok": True, "orders": n, "spent": spent, "avg": round(spent / n) if n else 0,
+        "cashback": sum(r[3] or 0 for r in rows if r[4] == "done"), "saved": sum(max(0, (r[2] or 0) - r[1]) for r in rows if r[2]),
+        "topup": topup, "wallet": wallet_of(uid),
+        "months": [{"k": k, "label": RU_MON[int(k[5:]) - 1], "n": months.get(k, [0, 0])[0], "spent": months.get(k, [0, 0])[1]} for k in keys],
+        "games": [{"game": g, "n": v[0], "spent": v[1]} for g, v in sorted(games.items(), key=lambda x: -x[1][1])[:6]]})
+
+
+async def api_seller_stats(request):
+    """Статистика продавца за период (7 / 30 дней / всё время)."""
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    uid = user["id"]
+    try:
+        days = int(data.get("days", 30))
+    except (TypeError, ValueError):
+        days = 30
+    days = days if days in (7, 30, 0) else 30
+    since = time.time() - days * 86400 if days else 0
+    fee = seller_fee(uid)
+    q = ",".join("?" * len(LIVE_PAID))
+    with closing(db()) as c:
+        rows = c.execute(f"SELECT id,pack,label,stars,status,COALESCE(paid_at,created) FROM orders WHERE seller_id=? AND status IN ({q}) AND COALESCE(paid_at,created)>=?",
+                         (uid, *LIVE_PAID, since)).fetchall()
+        refunds = c.execute("SELECT COUNT(*) FROM orders WHERE seller_id=? AND status='refunded' AND COALESCE(paid_at,created)>=?", (uid, since)).fetchone()[0]
+        offers = c.execute("SELECT id,title,status FROM offers WHERE seller_id=?", (uid,)).fetchall()
+        views = dict(c.execute("SELECT offer_id,COUNT(*) FROM offer_views WHERE offer_id IN (SELECT id FROM offers WHERE seller_id=?) AND ts>=? GROUP BY offer_id", (uid, since)).fetchall())
+    gain = lambda st: st * (100 - fee) // 100
+    done = [r for r in rows if r[4] == "done"]
+    total_views = sum(views.values())
+    span = days or 30
+    series = {k: [0, 0] for k in _days_back(span)}
+    for r in rows:
+        k = _day_key(r[5])
+        if k in series:
+            series[k][0] += 1; series[k][1] += gain(r[3])
+    top = {}
+    for oid, pack, label, st, status, ts in rows:
+        t = top.setdefault(pack, [label, 0, 0]); t[1] += 1; t[2] += gain(st)
+    toplist = []
+    for oid, title, st in offers:
+        key = f"o{oid}"
+        v = views.get(oid, 0)
+        if key in top or v:
+            t = top.get(key, [title, 0, 0]); toplist.append({"id": key, "title": title, "sold": t[1], "gain": t[2], "views": v})
+    toplist.sort(key=lambda x: (-x["gain"], -x["views"]))
+    return web.json_response({
+        "ok": True, "days": days, "fee": fee, "orders": len(rows), "done": len(done), "gain": sum(gain(r[3]) for r in done),
+        "escrow": sum(gain(r[3]) for r in rows if r[4] in ("paid", "delivered")), "disputes": sum(1 for r in rows if r[4] == "dispute"),
+        "refunds": refunds, "views": total_views, "conv": round(len(rows) * 100 / total_views, 1) if total_views else 0,
+        "avg": round(sum(r[3] for r in rows) / len(rows)) if rows else 0,
+        "series": [{"d": k[5:], "n": v[0], "gain": v[1]} for k, v in series.items()], "top": toplist[:5]})
+
+
 async def api_wallet(request):
     user, _ = await _auth(request)
     if not user:
@@ -3189,6 +3281,8 @@ async def start_api():
     app.router.add_route("*", "/api/seller/verify_req", api_seller_verify_req)
     app.router.add_route("*", "/api/offer_view", api_offer_view)
     app.router.add_route("*", "/api/notify_set", api_notify_set)
+    app.router.add_route("*", "/api/stats", api_stats)
+    app.router.add_route("*", "/api/seller/stats", api_seller_stats)
     app.router.add_route("*", "/api/accounts", api_accounts)
     app.router.add_route("*", "/api/order/code", api_order_code)
     app.router.add_route("*", "/api/wallet", api_wallet)

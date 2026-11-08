@@ -29,7 +29,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import BotCommand, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp, Message, WebAppInfo
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -267,7 +267,7 @@ async def decide(kind: str, rid: int, ok: bool, reason: str = "") -> tuple[bool,
             await notify_seller(rid_seller, msg)
             return True, note
         elif kind == "payout":
-            r = c.execute("SELECT seller_id,stars FROM payouts WHERE id=? AND status='pending'", (rid,)).fetchone()
+            r = c.execute("SELECT seller_id,stars,COALESCE(kind,'seller') FROM payouts WHERE id=? AND status='pending'", (rid,)).fetchone()
             if not r:
                 return False, "Уже обработано"
             if ok:
@@ -275,7 +275,11 @@ async def decide(kind: str, rid: int, ok: bool, reason: str = "") -> tuple[bool,
                 msg, note = f"💸 Выплата #{rid} на {r[1]}⭐ отправлена.", "✅ Выплата отмечена как выплаченная"
             else:
                 c.execute("UPDATE payouts SET status='rejected' WHERE id=?", (rid,))
-                c.execute("UPDATE sellers SET balance=balance+? WHERE user_id=?", (r[1], r[0]))
+                if r[2] == "wallet":
+                    c.execute("UPDATE users SET wallet=COALESCE(wallet,0)+? WHERE user_id=?", (r[1], r[0]))
+                    c.execute("INSERT INTO wallet_tx(user_id,kind,stars,title,status,ref,created) VALUES(?,?,?,?,?,?,?)", (r[0], "refund", r[1], f"Возврат вывода #{rid}", "done", f"po:{rid}", int(time.time())))
+                else:
+                    c.execute("UPDATE sellers SET balance=balance+? WHERE user_id=?", (r[1], r[0]))
                 msg, note = f"↩️ Выплата #{rid} отклонена, {r[1]}⭐ вернулись на баланс." + why, "↩️ Отклонено, звёзды вернулись на баланс"
             c.commit()
             await notify_seller(r[0], msg)
@@ -299,7 +303,19 @@ async def do_seller_act(uid: int, act: str, text: str = "") -> tuple[bool, str]:
                 c.execute("UPDATE sellers SET verify_req=0 WHERE user_id=?", (uid,))
                 c.commit()
             await notify_seller(uid, "✅ Тебе выдана <b>галочка проверенного продавца</b> — она теперь видна рядом с именем в магазине!")
-        return True, "✅ Галочка выдана" if on else "Галочка снята"
+        else:
+            why = (text or "").strip()[:500]
+            if why == "-":
+                why = ""
+            with sdb() as c:   # после снятия подать заявку заново можно только через VERIFY_RETRY_DAYS (3) дня
+                c.execute("UPDATE sellers SET verify_req=0, verify_rej=? WHERE user_id=?", (int(time.time()), uid))
+                if why != "":
+                    c.execute("INSERT INTO admin_msgs(seller_id,from_admin,text,created) VALUES(?,1,?,?)", (uid, "⚠️ Галочка проверенного продавца снята. Причина: " + why, int(time.time())))
+                c.commit()
+            await notify_seller(uid, "⚠️ <b>Галочка проверенного продавца снята</b>\n"
+                                     + (f"Причина: {escape(why)}\n" if why else "") +
+                                     "Она больше не отображается рядом с именем. Новую заявку можно подать через 3 дня — Azika Seller → Профиль → «Галочка продавца».")
+        return True, "✅ Галочка выдана" if on else "Галочка снята, продавец уведомлён"
     if act in ("up", "down", "auto"):
         if act == "up":
             if i["level"] + 1 >= len(LEVELS):
@@ -504,6 +520,74 @@ def pause_msg_set(text: str):
 
 
 # ---------------------------- сводка ----------------------------------
+def full_stats(days: int = 30) -> dict:
+    """Подробная статистика магазина для админа: оборот, комиссия, выплаты, графики по дням, топы."""
+    if not shop_ok():
+        return {}
+    days = days if days in (7, 30, 0) else 30
+    now = time.time()
+    since = now - days * 86400 if days else 0
+    live = ("paid", "delivered", "dispute", "done")
+    q = ",".join("?" * len(live))
+    dk = lambda ts: time.strftime("%Y-%m-%d", time.localtime(ts))
+    with sdb() as c:
+        rows = c.execute(f"SELECT game,stars,COALESCE(seller_id,0),status,COALESCE(paid_at,created) FROM orders WHERE status IN ({q}) AND COALESCE(paid_at,created)>=?", (*live, since)).fetchall()
+        refunds = c.execute("SELECT COUNT(*) FROM orders WHERE status='refunded' AND COALESCE(paid_at,created)>=?", (since,)).fetchone()[0]
+        users_all = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        users_new = c.execute("SELECT COUNT(*) FROM users WHERE COALESCE(joined,0)>=?", (since,)).fetchone()[0]
+        po_p = c.execute("SELECT COUNT(*),COALESCE(SUM(stars),0) FROM payouts WHERE status='pending'").fetchone()
+        po_d = c.execute("SELECT COALESCE(SUM(stars),0),COALESCE(SUM(fee),0) FROM payouts WHERE status='paid' AND created>=?", (since,)).fetchone()
+        float_ = c.execute("SELECT COALESCE(SUM(wallet),0) FROM users").fetchone()[0]
+        topup = c.execute("SELECT COALESCE(SUM(stars),0) FROM wallet_tx WHERE kind='topup' AND status='done' AND created>=?", (since,)).fetchone()[0]
+        sl = c.execute("SELECT COUNT(*),COALESCE(SUM(COALESCE(verified,0)),0) FROM sellers WHERE status='approved'").fetchone()
+    turn = sum(r[1] for r in rows)
+    own = sum(r[1] for r in rows if not r[2])
+    fees, sellers, games = {}, {}, {}
+    comm = 0
+    for g, st, sid, status, ts in rows:
+        a = games.setdefault(g, [0, 0]); a[0] += 1; a[1] += st
+        if sid:
+            if sid not in fees:
+                i = seller_info(sid); fees[sid] = (i["fee"] if i else 10, display_name(i) if i else str(sid))
+            comm += st * fees[sid][0] // 100
+            b = sellers.setdefault(sid, [0, 0]); b[0] += 1; b[1] += st
+    span = days or 30
+    series = {dk(now - i * 86400): [0, 0] for i in range(span - 1, -1, -1)}
+    for r in rows:
+        k = dk(r[4])
+        if k in series:
+            series[k][0] += 1; series[k][1] += r[1]
+    return {"days": days, "orders": len(rows), "turnover": turn, "own": own, "sellers_turn": turn - own, "commission": comm,
+            "avg": round(turn / len(rows)) if rows else 0, "refunds": refunds, "disputes": sum(1 for r in rows if r[3] == "dispute"),
+            "users": users_all, "users_new": users_new, "payouts_pending": {"n": po_p[0], "stars": po_p[1]}, "payouts_paid": po_d[0], "wallet_fees": po_d[1],
+            "wallet_float": float_, "topups": topup, "sellers": sl[0], "verified": sl[1],
+            "series": [{"d": k[5:], "n": v[0], "stars": v[1]} for k, v in series.items()],
+            "top_games": [{"game": g, "n": v[0], "stars": v[1]} for g, v in sorted(games.items(), key=lambda x: -x[1][1])[:5]],
+            "top_sellers": [{"id": sid, "name": fees[sid][1], "n": v[0], "stars": v[1]} for sid, v in sorted(sellers.items(), key=lambda x: -x[1][1])[:5]]}
+
+
+def stats_text(days: int = 30) -> str:
+    s = full_stats(days)
+    if not s:
+        return "База магазина не найдена"
+    per = {7: "7 дней", 30: "30 дней", 0: "всё время"}[s["days"]]
+    t = (f"📊 <b>Статистика · {per}</b>\n\n"
+         f"Заказов: <b>{s['orders']}</b> · оборот <b>{s['turnover']}⭐</b> (твои {s['own']}⭐ · продавцов {s['sellers_turn']}⭐)\n"
+         f"Комиссия с продавцов ≈ <b>{s['commission']}⭐</b> · средний чек {s['avg']}⭐\n"
+         f"Возвраты: {s['refunds']} · споры: {s['disputes']}\n"
+         f"Пользователи: {s['users']} (+{s['users_new']})\n"
+         f"Выплаты: в очереди {s['payouts_pending']['n']} на {s['payouts_pending']['stars']}⭐ · выплачено {s['payouts_paid']}⭐ (комиссия вывода {s['wallet_fees']}⭐)\n"
+         f"Балансы покупателей: {s['wallet_float']}⭐ · пополнений {s['topups']}⭐\n"
+         f"Продавцов: {s['sellers']} (с галочкой {s['verified']})")
+    if s["top_games"]:
+        t += "\n\n🎮 <b>Топ игр</b>\n" + "\n".join(f"{i}. {escape(g['game'])} — {g['n']} · {g['stars']}⭐" for i, g in enumerate(s["top_games"], 1))
+    if s["top_sellers"]:
+        t += "\n\n🏪 <b>Топ продавцов</b>\n" + "\n".join(f"{i}. {escape(g['name'])} — {g['n']} · {g['stars']}⭐" for i, g in enumerate(s["top_sellers"], 1))
+    return t
+
+
+
+
 def stats() -> dict:
     out = {"shop": None, "vpn": None}
     if shop_ok():
@@ -625,6 +709,14 @@ async def show(target, text: str, markup: InlineKeyboardMarkup | None = None):
             pass   # на этот запрос уже ответили всплывающим текстом
     else:
         await target.answer(text, reply_markup=markup)
+
+
+@dp.message(Command("stats"))
+async def cmd_stats(message: Message, command: CommandObject):
+    if not is_admin(message.from_user.id):
+        return
+    a = (command.args or "30").strip()
+    await message.answer(stats_text(0 if a in ("all", "0", "всё", "все") else 7 if a == "7" else 30))
 
 
 @dp.message(CommandStart())
@@ -959,6 +1051,15 @@ def seller_row_json(i: dict) -> dict:
 
 
 @admin_route
+async def api_stats(d):
+    try:
+        days = int(d.get("days", 30))
+    except (TypeError, ValueError):
+        days = 30
+    return {"ok": True, "stats": full_stats(days)}
+
+
+@admin_route
 async def api_overview(d):
     return {"ok": True, "chat_unread": chat_unread(), "counts": queue_counts() if shop_ok() else {}, "pause": {**pause_state(), "msg": kv_get(sdb, "pause_msg", DEFAULT_PAUSE) if shop_ok() else DEFAULT_PAUSE},
             "stats": stats(), "shop_ok": shop_ok(), "vpn_ok": vpn_ok()}
@@ -1069,7 +1170,7 @@ async def api_pause(d):
 
 def build_api() -> web.Application:
     app = web.Application(client_max_size=1024 * 1024)
-    for name, fn in (("overview", api_overview), ("queue", api_queue), ("decide", api_decide), ("sellers", api_sellers), ("seller", api_seller),
+    for name, fn in (("stats", api_stats), ("overview", api_overview), ("queue", api_queue), ("decide", api_decide), ("sellers", api_sellers), ("seller", api_seller),
                      ("seller_act", api_seller_act), ("chats", api_chats), ("chat", api_chat), ("chat_send", api_chat_send), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause)):
         app.router.add_post(f"/api/{name}", fn)
     return app

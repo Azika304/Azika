@@ -176,6 +176,11 @@ input.f:focus,textarea.f:focus{border-color:var(--a1)}textarea.f{resize:none;hei
 .pls.ptabs button{flex:none;border:0;border-radius:99px;padding:13px 20px;font:800 15px Manrope,sans-serif;background:var(--card);color:var(--text);border:1px solid var(--line);cursor:pointer;white-space:nowrap}.pls.ptabs button.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 8px 18px rgba(192,38,211,.4)}
 .hbg{flex:none;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center}
 .prow2 .pls{flex:1;min-width:0;margin:0}.hbg{background:var(--card2)}
+.bch{display:flex;align-items:flex-end;gap:3px;height:110px;margin:6px 0 4px}.bch i{flex:1;min-width:2px;border-radius:5px 5px 2px 2px;background:var(--grad,#7c5cff);opacity:.9;position:relative;min-height:2px}.bch i.z{opacity:.25}
+.bchl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:10px}
+.kp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.kp>div{background:var(--card2,var(--card));border:1px solid var(--line);border-radius:16px;padding:12px}.kp b{display:block;font-size:20px;font-weight:800}.kp span{font-size:11.5px;color:var(--muted);font-weight:700}
+.hb{margin:8px 0}.hb .t{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:4px;gap:8px}.hb .t span:last-child{color:var(--muted);white-space:nowrap}.hb .b{height:8px;border-radius:99px;background:var(--line);overflow:hidden}.hb .b i{display:block;height:100%;border-radius:99px;background:var(--grad,#7c5cff)}
+.sth{font-size:12px;font-weight:800;color:var(--muted);margin:16px 0 4px;letter-spacing:.3px}
 </style>
 </head>
 <body>
@@ -587,6 +592,30 @@ function verifySheet(me) {
     catch (e) { toast("Нет связи"); $("#vgo").disabled = false; } };
 }
 
+
+function statBars(arr, key, lbl) {
+  const mx = Math.max(1, ...arr.map(x => x[key]));
+  return `<div class="bch">${arr.map(x => `<i class="${x[key] ? "" : "z"}" style="height:${Math.max(2, Math.round(x[key] / mx * 100))}%" title="${esc(String(x[lbl]))}: ${x[key]}"></i>`).join("")}</div><div class="bchl"><span>${esc(String(arr[0][lbl]))}</span><span>${esc(String(arr[arr.length - 1][lbl]))}</span></div>`;
+}
+function statHb(items, nameK, valK, cntK, unit) {
+  const mx = Math.max(1, ...items.map(x => x[valK]));
+  return items.map(x => `<div class="hb"><div class="t"><span>${esc(String(x[nameK]))}</span><span>${x[valK]} ${unit}${cntK ? " · " + x[cntK] + " зак." : ""}</span></div><div class="b"><i style="width:${Math.max(3, Math.round(x[valK] / mx * 100))}%"></i></div></div>`).join("");
+}
+
+async function statsScreen(days) {
+  days = days === undefined ? 30 : days;
+  if (!document.getElementById("cf")) fullOpen('<div><h3>Статистика</h3></div>', "");
+  const m = document.querySelector("#cf .cfm"); m.style.overflowY = "auto"; m.style.display = "block"; m.style.padding = "8px 14px 40px";
+  m.innerHTML = '<div class="sk" style="height:160px"></div>';
+  let r; try { r = await api("/api/seller/stats", { days }); if (!r.ok) throw 0; } catch (e) { m.innerHTML = '<div class="err">Нет связи</div>'; return; }
+  const P = [[7, "7 дней"], [30, "30 дней"], [0, "Всё время"]];
+  m.innerHTML = `<div class="pls sm">${P.map(([d, t]) => `<button data-d="${d}" class="${d === r.days ? "on" : ""}">${t}</button>`).join("")}</div>
+    <div class="kp"><div><b>${r.gain} ⭐</b><span>заработано (завершено: ${r.done})</span></div><div><b>${r.escrow} ⭐</b><span>в сделках</span></div><div><b>${r.orders}</b><span>заказов</span></div><div><b>${r.avg} ⭐</b><span>средний чек</span></div><div><b>${r.views}</b><span>просмотров</span></div><div><b>${r.conv}%</b><span>из просмотра в заказ</span></div><div><b>${r.disputes}</b><span>споров</span></div><div><b>${r.refunds}</b><span>возвратов</span></div></div>
+    <div class="sth">ЗАРАБОТОК ПО ДНЯМ, ⭐ (комиссия ${r.fee}%)</div>${statBars(r.series, "gain", "d")}
+    <div class="sth">ТОП ТОВАРОВ</div>${r.top.length ? statHb(r.top.map(x => ({ ...x, name: x.title + " · 👀 " + x.views })), "name", "gain", "sold", "⭐") : '<p style="color:var(--muted)">Пока нет продаж и просмотров</p>'}`;
+  m.querySelectorAll("[data-d]").forEach(b => b.onclick = () => { haptic(); statsScreen(+b.dataset.d); });
+}
+
 function menuSheet(me, nm) {
   const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user || {};
   sheetOpen(`<div class="sh-h"><div><h3>Меню</h3><p>${esc(nm)}${u.username ? " · @" + esc(u.username) : ""}</p></div></div>
@@ -594,6 +623,7 @@ function menuSheet(me, nm) {
     <div class="mnr nsw"><div class="mi">✈️</div><b>Вы вошли через Telegram<small style="display:block;font-weight:600;color:var(--muted);font-size:12px">ID ${me.id}</small></b></div>
     <div class="mnr nsw"><div class="mi">🔔</div><b>Уведомления<small style="display:block;font-weight:600;color:var(--muted);font-size:12px">Новые сообщения из чатов</small></b><button class="ntgl ${me.notify !== false ? "on" : ""}" id="ntg" aria-label="Уведомления"></button></div>
     <div class="mnr" data-m="bal"><div class="mi">💼</div><b>Баланс и выплаты</b><i>›</i></div>
+    <div class="mnr" data-m="st"><div class="mi">📊</div><b>Статистика продаж</b><i>›</i></div>
     <div class="mnr" data-m="rv"><div class="mi">⭐</div><b>Мои отзывы</b><i>›</i></div>
     ${me.verified ? "" : '<div class="mnr" data-m="ver"><div class="mi">✓</div><b>Подать заявку на галочку</b><i>›</i></div>'}
     <div class="mnr" data-m="lvl"><div class="mi">⚡</div><b>Уровень и комиссия</b><i>${me.fee}% ›</i></div>
@@ -603,7 +633,7 @@ function menuSheet(me, nm) {
   $("#ntg").onclick = async () => { const b = $("#ntg"), on = !b.classList.contains("on"); b.classList.toggle("on", on); haptic();
     try { const r = await api("/api/notify_set", {on}); if (!r.ok) throw 0; me.notify = on; } catch (e) { b.classList.toggle("on", !on); toast("Нет связи"); } };
   document.querySelectorAll("#sheet [data-m]").forEach(r => r.onclick = () => { haptic(); const k = r.dataset.m; closeSheet();
-    if (k === "ava") openAvatar(me, nm, showMoney); else if (k === "bal") balanceScreen("out"); else if (k === "rv") openReviews(); else if (k === "lvl") levelSheet(me); else if (k === "ver") verifySheet(me);
+    if (k === "ava") openAvatar(me, nm, showMoney); else if (k === "bal") balanceScreen("out"); else if (k === "rv") openReviews(); else if (k === "lvl") levelSheet(me); else if (k === "ver") verifySheet(me); else if (k === "st") statsScreen();
     else if (k === "sup") open("https://t.me/" + (S.support || "@azikashop_support_bot").replace(/^@/, "") + "?start=seller"); else open("https://t.me/azika_sellers_bot"); });
 }
 async function showMoney() {
@@ -615,6 +645,7 @@ async function showMoney() {
       <div><h3>${esc(nm)} ${me.verified ? '<span class="ck">✓</span>' : ""}</h3><p>${u.username ? "@" + esc(u.username) + " · " : ""}ID ${me.id}</p><div class="lvrow"><button class="lvl ${store("lvl_seen2") ? "" : "pulse"}" id="lvl">⚡ ${esc(L.cur.name)} <small>· ${L.cur.fee}%</small> ›</button>${store("lvl_seen2") ? "" : '<span class="tapme">👈 нажми</span>'}</div></div></div>
     ${me.review ? '<div class="note" style="margin:0 0 12px;background:rgba(255,200,61,.14);color:var(--gold);font-size:13px">🔍 <b>Твой аккаунт на проверке.</b> Товары временно скрыты из магазина, новые покупки закрыты. Уже оплаченные заказы выполняй как обычно. Напиши администрации во вкладке «Чаты».</div>' : ""}
     <div class="wal" id="wal2"><div class="wi">💰</div><div style="flex:1"><b>${me.balance} ⭐</b><small>доступно к выплате${me.escrow ? ` · в сделках ${me.escrow} ⭐` : ""}${me.pending_payout ? ` · на выводе ${me.pending_payout} ⭐` : ""}</small></div><i>›</i></div>
+    <div class="wal" id="stRow"><div class="wi">📊</div><div style="flex:1"><b>Статистика</b><small>продажи, просмотры, топ товаров</small></div><i>›</i></div>
     ${me.verified ? "" : `<div class="wal" id="verRow"><div class="wi">✓</div><div style="flex:1"><b>Галочка продавца</b><small>${me.verify && me.verify.state === "pending" ? "заявка на рассмотрении" : "требования и подать заявку"}</small></div><i>›</i></div>`}
     <div class="prow2"><div class="pls"><button id="pOff">Мои товары</button><button id="pOrd">Продажи</button></div><button class="hbg" id="pMnu" aria-label="Меню">☰</button></div>
     <div class="card"><h4>Мой профиль</h4><div class="kv"><div><b>${me.deals}</b><span>сделок</span></div><div><b>${me.reviews ? "★ " + me.avg : "—"}</b><span>рейтинг</span></div><div><b>${me.reviews}</b><span>отзывов</span></div></div>
@@ -626,6 +657,7 @@ async function showMoney() {
   $("#ava").onclick = () => { haptic(); openAvatar(me, nm, showMoney); };
   $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(me); };
   $("#wal2").onclick = () => { haptic(); balanceScreen("out"); };
+  $("#stRow").onclick = () => { haptic(); statsScreen(); };
   if ($("#verRow")) $("#verRow").onclick = () => { haptic(); verifySheet(me); };
   $("#pOff").onclick = () => { haptic(); S.dir = -1; S.ofSec = "items"; S.tab = "offers"; go(); };
   $("#pOrd").onclick = () => { haptic(); S.dir = -1; S.ofSec = "sales"; S.tab = "offers"; go(); };
