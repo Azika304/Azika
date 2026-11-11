@@ -104,7 +104,7 @@ button{transition:transform .12s,background .2s,opacity .2s}
 <div class="sheet-bg" id="sbg"></div><div class="sheet" id="sh"></div><div class="toast" id="ts"></div>
 <script>
 const tg = window.Telegram && Telegram.WebApp;
-if (tg) { tg.ready(); tg.expand(); try { tg.requestFullscreen && !tg.isFullscreen && tg.requestFullscreen(); } catch (e) {} try { tg.setHeaderColor("#0b0b1a"); tg.setBackgroundColor("#0b0b1a"); } catch (e) {} }
+if (tg) { tg.ready(); tg.expand(); try { tg.requestFullscreen && !tg.isFullscreen && /^(android|android_x|ios)$/.test(tg.platform || "") && tg.requestFullscreen(); } catch (e) {} try { tg.setHeaderColor("#0b0b1a"); tg.setBackgroundColor("#0b0b1a"); } catch (e) {} }
 const params = new URLSearchParams(location.search);
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
 const API = (params.get("api") || store("api") || "https://92-243-74-80.sslip.io:8443/shop").replace(/\/$/, "");

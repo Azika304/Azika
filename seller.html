@@ -199,7 +199,7 @@ input.f:focus,textarea.f:focus{border-color:var(--a1)}textarea.f{resize:none;hei
 <script>
 const tg = window.Telegram && Telegram.WebApp;
 if (tg) { tg.ready(); tg.expand();
-  try { if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); } catch (e) {}
+  try { if (tg.requestFullscreen && !tg.isFullscreen && /^(android|android_x|ios)$/.test(tg.platform || "")) tg.requestFullscreen(); } catch (e) {}
   try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch (e) {}
   const hb = () => { if (!document.hidden && tg.initData) api("/api/beat", {}).catch(() => {}); };
   setTimeout(hb, 1500); setInterval(hb, 30000); }

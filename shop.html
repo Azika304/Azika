@@ -403,7 +403,7 @@ textarea.f{resize:none;height:58px}
 <script>
 const tg = window.Telegram && Telegram.WebApp;
 if (tg) { tg.ready(); tg.expand();
-  try { if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); } catch (e) {}
+  try { if (tg.requestFullscreen && !tg.isFullscreen && /^(android|android_x|ios)$/.test(tg.platform || "")) tg.requestFullscreen(); } catch (e) {}
   try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch (e) {}
   const hb = () => { if (!document.hidden && tg.initData) api("/api/beat", {}).catch(() => {}); };
   setTimeout(hb, 1500); setInterval(hb, 30000); }
