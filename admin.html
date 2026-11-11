@@ -9,9 +9,10 @@
 :root{--bg:#0b0b1a;--card:#15152b;--card2:#1c1c38;--line:#2a2a4d;--tx:#f1f1ff;--mu:#8e8eb8;--ac:#6366f1;--ac2:#818cf8;--ok:#22c55e;--no:#ef4444;--wa:#f59e0b}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 -apple-system,Segoe UI,Roboto,sans-serif}
-body{padding:0 16px calc(96px + env(safe-area-inset-bottom));min-height:100vh;background:radial-gradient(600px 300px at 80% -50px,#312e8155,transparent),var(--bg)}
+body{padding:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) 16px calc(96px + env(safe-area-inset-bottom));min-height:100vh;background:radial-gradient(600px 300px at 80% -50px,#312e8155,transparent),var(--bg)}
 h1{font-size:22px;margin:18px 0 12px;display:flex;align-items:center;gap:10px}
 h1 b{color:var(--ac2)}
+.onl{margin-left:auto;font-size:13px;font-weight:800;padding:6px 11px;border-radius:99px;background:#22c55e22;border:1px solid #22c55e55;color:#86efac;white-space:nowrap}
 .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}
 .row{display:flex;align-items:center;gap:12px}
 .grow{flex:1;min-width:0}
@@ -96,14 +97,14 @@ button{transition:transform .12s,background .2s,opacity .2s}
 </style>
 </head>
 <body>
-<h1><span class="mav" style="width:36px;height:36px;border-radius:12px">🛠</span> Azika <b>Admin</b></h1>
+<h1><span class="mav" style="width:36px;height:36px;border-radius:12px">🛠</span> Azika <b>Admin</b><span id="onl" class="onl" title="Сейчас в приложениях">🟢 …</span></h1>
 <div id="v"></div>
 <nav class="tabs"><div class="pillbg" id="pb"></div>
 <button data-t="q"><span>📥</span>Заявки</button><button data-t="s"><span>👥</span>Продавцы</button><button data-t="c"><span>💬</span>Чаты</button><button data-t="p"><span>🎟</span>Промо</button><button data-t="m"><span>⚙️</span>Ещё</button></nav>
 <div class="sheet-bg" id="sbg"></div><div class="sheet" id="sh"></div><div class="toast" id="ts"></div>
 <script>
 const tg = window.Telegram && Telegram.WebApp;
-if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("#0b0b1a"); tg.setBackgroundColor("#0b0b1a"); } catch (e) {} }
+if (tg) { tg.ready(); tg.expand(); try { tg.requestFullscreen && !tg.isFullscreen && tg.requestFullscreen(); } catch (e) {} try { tg.setHeaderColor("#0b0b1a"); tg.setBackgroundColor("#0b0b1a"); } catch (e) {} }
 const params = new URLSearchParams(location.search);
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
 const API = (params.get("api") || store("api") || "https://92-243-74-80.sslip.io:8443/shop").replace(/\/$/, "");
@@ -355,9 +356,10 @@ async function viewMore() {
   $("#pmb").onclick = async () => { const r = await api("pause", { which: "all", text: $("#pm").value }); if (r.ok) toast("Текст сохранён"); };
 }
 
-setInterval(() => { if (!document.hidden) api("overview", { quiet: true }).then(j => { if (j.ok) { counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge(); } }); }, 25000);
+const onl = j => { if (j && j.online && $("#onl")) $("#onl").textContent = "🟢 " + j.online.now + " онлайн · " + j.online.day + " за сутки"; };
+setInterval(() => { if (!document.hidden) api("overview", { quiet: true }).then(j => { if (j.ok) { onl(j); counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge(); } }); }, 25000);
 setTab("q");
-api("overview", { quiet: true }).then(j => { if (j.ok) { counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge(); } });
+api("overview", { quiet: true }).then(j => { if (j.ok) { onl(j); counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge(); } });
 </script>
 </body>
 </html>

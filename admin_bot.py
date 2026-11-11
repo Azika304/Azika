@@ -1059,9 +1059,23 @@ async def api_stats(d):
     return {"ok": True, "stats": full_stats(days)}
 
 
+def online_info() -> dict:
+    """Сколько людей сейчас в Azika Shop / Seller (пульс раз в ~30 с, окно 75 с)."""
+    if not shop_ok():
+        return {"now": 0, "day": 0}
+    now = int(time.time())
+    try:
+        with sdb() as c:
+            a = c.execute("SELECT COUNT(*) FROM seen WHERE ts>=?", (now - 75,)).fetchone()[0]
+            b = c.execute("SELECT COUNT(*) FROM seen WHERE ts>=?", (now - 86400,)).fetchone()[0]
+        return {"now": a, "day": b}
+    except Exception:
+        return {"now": 0, "day": 0}
+
+
 @admin_route
 async def api_overview(d):
-    return {"ok": True, "chat_unread": chat_unread(), "counts": queue_counts() if shop_ok() else {}, "pause": {**pause_state(), "msg": kv_get(sdb, "pause_msg", DEFAULT_PAUSE) if shop_ok() else DEFAULT_PAUSE},
+    return {"ok": True, "online": online_info(), "chat_unread": chat_unread(), "counts": queue_counts() if shop_ok() else {}, "pause": {**pause_state(), "msg": kv_get(sdb, "pause_msg", DEFAULT_PAUSE) if shop_ok() else DEFAULT_PAUSE},
             "stats": stats(), "shop_ok": shop_ok(), "vpn_ok": vpn_ok()}
 
 

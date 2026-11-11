@@ -475,6 +475,7 @@ def catalog() -> list:
                          (int(time.time()),)).fetchall()
         offers_all = [dict(zip(OFFER_COLS.split(","), r)) for r in rows]
         deals = dict(c.execute("SELECT seller_id,COUNT(*) FROM orders WHERE status='done' AND seller_id>0 GROUP BY seller_id").fetchall())
+        ov = dict(c.execute("SELECT offer_id,COUNT(*) FROM offer_views GROUP BY offer_id").fetchall())
     sellers_info = {}
     for o in offers_all:
         sid = o["seller_id"]
@@ -497,7 +498,7 @@ def catalog() -> list:
                         "field": g["field"], "kind": g["kind"], "img": img(g["id"]), "packs": packs, "desc": GIFT_DESC.get(g["id"], ""), "info": infos.get(g["id"]) or INFO_DEFAULT.get(g["kind"], ""),
                         "offers": [{"id": f"o{o['id']}", "label": o["title"], "desc": o["descr"], "stars": o["stars"],
                                     "icon": g["icon"], "tier": 3, "img": img(f"o{o['id']}"), "seller": sellers_info[o["seller_id"]],
-                                    "ad": o["boost_until"] > time.time()}
+                                    "ad": o["boost_until"] > time.time(), "views": int(ov.get(o["id"], 0))}
                                    for o in offers]})
     return out
 
@@ -2773,6 +2774,12 @@ def admin_unread(uid: int) -> int:
         return c.execute("SELECT COUNT(*) FROM admin_msgs WHERE seller_id=? AND from_admin=1 AND read=0", (uid,)).fetchone()[0]
 
 
+async def api_beat(request):
+    """Пульс из приложения: _auth уже отметил пользователя как «онлайн»."""
+    user, _ = await _auth(request)
+    return web.json_response({"ok": bool(user)})
+
+
 async def api_offer_view(request):
     """Покупатель открыл объявление продавца — считаем уникальный просмотр."""
     user, data = await _auth(request)
@@ -3280,6 +3287,7 @@ async def start_api():
     app.router.add_route("*", "/api/seller/me", api_seller_me)
     app.router.add_route("*", "/api/seller/verify_req", api_seller_verify_req)
     app.router.add_route("*", "/api/offer_view", api_offer_view)
+    app.router.add_route("*", "/api/beat", api_beat)
     app.router.add_route("*", "/api/notify_set", api_notify_set)
     app.router.add_route("*", "/api/stats", api_stats)
     app.router.add_route("*", "/api/seller/stats", api_seller_stats)

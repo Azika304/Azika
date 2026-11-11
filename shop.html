@@ -21,7 +21,7 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;color:var(--text);font-family:Manrope,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg)}
-body{min-height:100vh;overflow-x:hidden;padding:0 0 calc(96px + env(safe-area-inset-bottom));
+body{min-height:100vh;overflow-x:hidden;padding:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) 0 calc(96px + env(safe-area-inset-bottom));
   background:radial-gradient(900px 520px at 8% -8%,var(--glow1),transparent 62%),radial-gradient(700px 520px at 105% 6%,var(--glow2),transparent 62%),radial-gradient(640px 520px at 50% 112%,var(--glow3),transparent 62%),var(--bg);
   background-attachment:fixed;transition:background-color .3s,color .3s}
 .wrap{max-width:560px;margin:0 auto;padding:0 16px}
@@ -250,7 +250,7 @@ textarea.f{resize:none;height:58px}
 .err button,.empty button{margin-top:14px;padding:12px 24px;border-radius:14px;border:0;background:var(--grad);color:#fff;font:800 14px Manrope,sans-serif;cursor:pointer}
 .sk{border-radius:22px;height:150px;background:linear-gradient(100deg,var(--card) 30%,var(--card2) 50%,var(--card) 70%);background-size:300% 100%;animation:sk 1.3s linear infinite}
 @keyframes sk{to{background-position:-100% 0}}
-.toast{position:fixed;left:16px;right:16px;top:calc(12px + env(safe-area-inset-top));max-width:528px;margin:0 auto;background:#2a1020;border:1px solid var(--bad);color:#ffd9de;padding:12px 14px;border-radius:14px;font-size:14px;font-weight:700;z-index:50;opacity:0;transform:translateY(-16px);pointer-events:none;transition:.3s}
+.toast{position:fixed;left:16px;right:16px;top:calc(12px + env(safe-area-inset-top) + var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px));max-width:528px;margin:0 auto;background:#2a1020;border:1px solid var(--bad);color:#ffd9de;padding:12px 14px;border-radius:14px;font-size:14px;font-weight:700;z-index:50;opacity:0;transform:translateY(-16px);pointer-events:none;transition:.3s}
 .toast.show{opacity:1;transform:none}
 .toast.ok{background:#07251c;border-color:var(--mint);color:#c6ffe9}
 .success{text-align:center;padding:36px 8px}
@@ -321,7 +321,7 @@ textarea.f{resize:none;height:58px}
 .onl{color:#2ee6a6;font-weight:700}.onl::first-letter{animation:onl 1.6s infinite}@keyframes onl{50%{opacity:.35}}
 #cf{position:fixed;left:0;right:0;top:0;height:100vh;z-index:60;background:var(--solid);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.9,.2,1)}
 #cf.show{transform:none}
-.cfh{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;border-bottom:1px solid var(--line);flex:none}
+.cfh{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top) + var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) 14px 10px;border-bottom:1px solid var(--line);flex:none}
 .cfh>div{min-width:0}.cfh h3{margin:0;font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cfh p{margin:2px 0 0;font-size:12px;color:var(--muted);font-weight:700}
 .cfb{width:38px;height:38px;border:0;border-radius:50%;background:var(--card2);color:var(--text);font:700 26px/1 Manrope,sans-serif;cursor:pointer;flex:none;padding:0 0 3px}
 .cfm{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 14px 0;max-width:640px;width:100%;margin:0 auto}
@@ -398,7 +398,11 @@ textarea.f{resize:none;height:58px}
 
 <script>
 const tg = window.Telegram && Telegram.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
+if (tg) { tg.ready(); tg.expand();
+  try { if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); } catch (e) {}
+  try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch (e) {}
+  const hb = () => { if (!document.hidden && tg.initData) api("/api/beat", {}).catch(() => {}); };
+  setTimeout(hb, 1500); setInterval(hb, 30000); }
 
 function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
 const params = new URLSearchParams(location.search);
@@ -681,7 +685,7 @@ function sellerLine(p) {
 }
 function prow(g, p, i, withGame) {
   return `<div class="pbar up" style="--i:${i}" data-g="${esc(g.id)}" data-p="${esc(p.id)}">${packArt(g, p)}
-    <div class="mid"><div class="lb">${esc(p.label)}${p.ad ? '<span class="ofb ad">реклама</span>' : p.offer ? '<span class="ofb">продавец</span>' : ""}</div><div class="sb sl">${withGame ? esc(g.name) + " · " : ""}${sellerLine(p)}</div></div>
+    <div class="mid"><div class="lb">${esc(p.label)}${p.ad ? '<span class="ofb ad">реклама</span>' : p.offer ? '<span class="ofb">продавец</span>' : ""}</div><div class="sb sl">${withGame ? esc(g.name) + " · " : ""}${sellerLine(p)}${p.offer ? ` · 👀 ${p.views || 0}` : ""}</div></div>
     <span class="price">${STAR}${p.stars}</span></div>`;
 }
 function bindSellers(root) {
@@ -764,7 +768,7 @@ function openSheet(g, p) {
   if (p.offer) api("/api/offer_view", { pack: p.id }).catch(() => {});
   const saved = store("pid_" + g.kind) || "";
   sheetOpen(`
-    <div class="sh-h">${packArt(g, p)}<div><h3>${esc(p.label)}</h3><p>${esc(g.name)} · ${p.stars} ⭐</p><p style="margin-top:6px">${sellerLine(p)}</p></div></div>
+    <div class="sh-h">${packArt(g, p)}<div><h3>${esc(p.label)}</h3><p>${esc(g.name)} · ${p.stars} ⭐</p><p style="margin-top:6px">${sellerLine(p)}</p>${p.offer ? `<p style="margin-top:4px">👀 ${(p.views || 0) + 1} просмотров</p>` : ""}</div></div>
     ${p.offer && p.desc ? `<div class="odesc">${esc(p.desc)}</div>` : ""}
     ${p.gift ? `<div class="odesc">🎁 ${esc(g.desc || "Цифровая подарочная карта")}<br><b>Проверь регион:</b> карта работает только на аккаунте того же региона, что указан в названии. Код выдаётся вручную (обычно до 15 минут), после выдачи кода возврат невозможен.</div>` : ""}
     <div class="row"><label>${esc(g.field).toUpperCase()}</label>
