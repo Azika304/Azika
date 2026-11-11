@@ -64,6 +64,9 @@ _LIMS = [int(x) for x in os.getenv("SELLER_LIMITS", "3,10,30,100").split(",")]  
 SELLER_LEVELS = [("Новичок", 0, 0, 0.0, _FEES[0], _LIMS[0]), ("Продавец", 5, 0, 0.0, _FEES[1], _LIMS[1]),
                  ("Профи", 20, 5, 4.5, _FEES[2], _LIMS[2]), ("Топ-продавец", 50, 10, 4.7, _FEES[3], _LIMS[3])]
 SELLER_FEE = max(_FEES)
+CRYPTO_TOKEN = os.getenv("CRYPTO_PAY_TOKEN", "").strip()          # токен из @CryptoBot -> Crypto Pay -> Create App (вводится только на сервере)
+CRYPTO_API = os.getenv("CRYPTO_PAY_API", "https://pay.crypt.bot/api").rstrip("/")   # тестовая сеть: https://testnet-pay.crypt.bot/api
+CRYPTO_ASSETS = os.getenv("CRYPTO_ASSETS", "USDT,TON,BTC,ETH,LTC,TRX")             # какими монетами можно платить
 WALLET_OUT_FEE = float(os.getenv("WALLET_OUT_FEE", "1"))  # комиссия вывода с кошелька покупателя, %
 PAYOUT_MIN = int(os.getenv("PAYOUT_MIN", "100"))         # минимальный вывод продавца, ⭐
 SELLER_BOT_TOKEN = os.getenv("SELLER_BOT_TOKEN", "")     # токен отдельного бота «Azika Sellers» (необязательно)
@@ -271,6 +274,7 @@ def init_db():
         c.execute("CREATE TABLE IF NOT EXISTS wallet_tx(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, kind TEXT, stars INTEGER, title TEXT DEFAULT '', "
                   "status TEXT DEFAULT 'done', ref TEXT DEFAULT '', created INTEGER)")
         c.execute("CREATE INDEX IF NOT EXISTS ix_wtx_user ON wallet_tx(user_id)")
+        c.execute("CREATE TABLE IF NOT EXISTS crypto_inv(invoice_id INTEGER PRIMARY KEY, kind TEXT, ref INTEGER, user_id INTEGER, status TEXT DEFAULT 'active', created INTEGER)")
         c.execute("CREATE TABLE IF NOT EXISTS offer_views(offer_id INTEGER, user_id INTEGER, ts INTEGER, PRIMARY KEY(offer_id,user_id))")   # просмотры объявлений (уникальные люди)   # когда человек последний раз был в приложении
         c.commit()
 
@@ -2110,7 +2114,7 @@ async def api_catalog(request):
     return web.json_response({"ok": True, "paused": sales_paused(), "shop": SHOP_NAME, "support": SUPPORT, "ref_percent": REF_PERCENT,
                               "done": done, "star_rub": STAR_RUB, "cashback_pct": max(p for _, p in CB_LEVELS), "cashback_levels": cb_level(0)["levels"],
                               "cashback_min": CASHBACK_MIN, "ttl_min": ORDER_TTL_MIN, "seller_fee": SELLER_FEE, "seller_fee_min": min(_FEES),
-                              "payout_min": PAYOUT_MIN, "seller_bot": SELLER_BOT_USERNAME, "seller_app": SELLER_WEBAPP_URL, "ad_price": AD_PRICE, "shop_rating": dict(zip(("avg", "count"), rating_of(0))),
+                              "crypto": crypto_on(), "payout_min": PAYOUT_MIN, "seller_bot": SELLER_BOT_USERNAME, "seller_app": SELLER_WEBAPP_URL, "ad_price": AD_PRICE, "shop_rating": dict(zip(("avg", "count"), rating_of(0))),
                               "games": catalog()})
 
 
@@ -2211,6 +2215,217 @@ async def api_quote(request):
     return web.json_response({"ok": True, **q, "wallet": wallet_of(user["id"])})
 
 
+# ==========================================
+# ₿ ОПЛАТА КРИПТОЙ (CryptoBot / Crypto Pay API)
+# ==========================================
+async def crypto_call(method: str, **params):
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as ses:
+        async with ses.post(f"{CRYPTO_API}/{method}", json=params, headers={"Crypto-Pay-API-Token": CRYPTO_TOKEN}) as r:
+            j = await r.json(content_type=None)
+    if not j.get("ok"):
+        raise RuntimeError(str(j)[:300])
+    return j["result"]
+
+
+async def crypto_create(uid: int, kind: str, ref: int, stars: int, title: str) -> dict:
+    """Счёт в ₽ (по курсу STAR_RUB): покупатель выбирает монету в CryptoBot, мы получаем её без потерь на выводе Stars."""
+    rub = round(stars * STAR_RUB, 2)
+    inv = await crypto_call("createInvoice", currency_type="fiat", fiat="RUB", amount=f"{rub:.2f}", accepted_assets=CRYPTO_ASSETS,
+                            description=title[:1000], payload=f"{kind}:{ref}", expires_in=ORDER_TTL_MIN * 60, allow_comments=False, allow_anonymous=False)
+    iid = int(inv["invoice_id"])
+    with closing(db()) as c:
+        c.execute("INSERT OR REPLACE INTO crypto_inv(invoice_id,kind,ref,user_id,status,created) VALUES(?,?,?,?,'active',?)", (iid, kind, ref, uid, int(time.time())))
+        c.commit()
+    return {"id": iid, "url": inv.get("bot_invoice_url") or inv.get("pay_url") or inv.get("mini_app_invoice_url") or "", "rub": rub}
+
+
+async def crypto_settle(iid: int, kind: str, ref: int, uid: int, inv: dict) -> bool:
+    """Обрабатывает счёт CryptoBot. True — оплачен и заказ выдан в работу."""
+    st = inv.get("status")
+    if st == "expired":
+        with closing(db()) as c:
+            c.execute("UPDATE crypto_inv SET status='expired' WHERE invoice_id=? AND status='active'", (iid,))
+            c.commit()
+        return False
+    if st != "paid":
+        return False
+    with closing(db()) as c:
+        cur = c.execute("UPDATE crypto_inv SET status='paid' WHERE invoice_id=? AND status='active'", (iid,))
+        c.commit()
+    if cur.rowcount != 1:
+        return True   # уже обработан
+    if kind != "shop":
+        return True
+    o = get_order(ref)
+    if o and o["status"] == "expired" and pack_available(o["pack"]):   # оплатил в последнюю минуту — заказ оживляем
+        with closing(db()) as c:
+            c.execute("UPDATE orders SET status='new' WHERE id=? AND status='expired'", (ref,))
+            c.commit()
+    if o and mark_paid(ref, f"crypto:{iid}"):
+        await after_paid(ref)
+        return True
+    try:
+        await bot.send_message(ADMIN_ID, f"⚠️ Крипто-оплата без активного заказа #{ref} от {uid} (счёт CryptoBot {iid}, {inv.get('amount')} {inv.get('fiat') or inv.get('asset')}). Нужен ручной возврат.")
+    except Exception:
+        pass
+    return True
+
+
+async def crypto_poll_once():
+    with closing(db()) as c:
+        rows = c.execute("SELECT invoice_id,kind,ref,user_id FROM crypto_inv WHERE status='active' AND created>? ORDER BY invoice_id DESC LIMIT 100", (int(time.time()) - 2 * 86400,)).fetchall()
+    if not rows:
+        return
+    res = await crypto_call("getInvoices", invoice_ids=",".join(str(r[0]) for r in rows), count=100)
+    items = res.get("items", []) if isinstance(res, dict) else (res or [])
+    by = {int(i["invoice_id"]): i for i in items}
+    for iid, kind, ref, uid in rows:
+        if iid in by:
+            await crypto_settle(iid, kind, ref, uid, by[iid])
+
+
+async def crypto_loop():
+    while True:
+        try:
+            if CRYPTO_TOKEN:
+                await crypto_poll_once()
+        except Exception as e:
+            logging.warning("crypto_loop: %s", e)
+        await asyncio.sleep(7)
+
+
+async def api_crypto_check(request):
+    """Приложение спрашивает: оплатил ли покупатель крипто-счёт этого заказа."""
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    try:
+        oid = int(data.get("order"))
+    except (TypeError, ValueError):
+        return web.json_response({"ok": False})
+    o = get_order(oid)
+    if not o or o["user_id"] != user["id"]:
+        return web.json_response({"ok": False})
+    if o["status"] in LIVE_PAID:
+        return web.json_response({"ok": True, "paid": True})
+    with closing(db()) as c:
+        r = c.execute("SELECT invoice_id,kind,ref,user_id FROM crypto_inv WHERE kind='shop' AND ref=? AND status='active' ORDER BY invoice_id DESC LIMIT 1", (oid,)).fetchone()
+    if r and CRYPTO_TOKEN:
+        try:
+            res = await crypto_call("getInvoices", invoice_ids=str(r[0]))
+            items = res.get("items", []) if isinstance(res, dict) else (res or [])
+            if items and await crypto_settle(r[0], r[1], r[2], r[3], items[0]):
+                return web.json_response({"ok": True, "paid": True})
+        except Exception as e:
+            logging.warning("crypto_check: %s", e)
+    o = get_order(oid)
+    return web.json_response({"ok": True, "paid": bool(o and o["status"] in LIVE_PAID)})
+
+
+# ---- ручной приём крипты на свой кошелёк (без CryptoBot): адреса задаёт админ командой /wallet ----
+def wallets_get() -> list:
+    try:
+        v = json.loads(kv_get("wallets", "[]"))
+        return [w for w in v if isinstance(w, dict) and w.get("n") and w.get("a")]
+    except Exception:
+        return []
+
+
+def wallets_set(v: list):
+    with closing(db()) as c:
+        c.execute("INSERT OR REPLACE INTO kv(k,v) VALUES('wallets',?)", (json.dumps(v, ensure_ascii=False),))
+        c.commit()
+
+
+def crypto_on() -> bool:
+    return bool(CRYPTO_TOKEN) or bool(wallets_get())
+
+
+@dp.message(Command("wallet"))
+async def admin_wallet(message: Message, command: CommandObject):
+    """/wallet — список адресов; /wallet add USDT-TRC20 Txxxx — добавить; /wallet del USDT-TRC20 — убрать."""
+    if not is_admin(message.from_user.id):
+        return
+    a = (command.args or "").split()
+    ws = wallets_get()
+    if len(a) >= 3 and a[0] == "add":
+        name, addr = a[1].replace("_", " ").upper(), a[2]
+        ws = [w for w in ws if w["n"] != name] + [{"n": name, "a": addr}]
+        wallets_set(ws)
+        await message.answer(f"✅ Добавлено: <b>{escape(name)}</b>\n<code>{escape(addr)}</code>")
+        return
+    if len(a) >= 2 and a[0] == "del":
+        name = a[1].replace("_", " ").upper()
+        wallets_set([w for w in ws if w["n"] != name])
+        await message.answer("🗑 Удалено" if any(w["n"] == name for w in ws) else "Такого нет")
+        return
+    txt = "\n".join(f"• <b>{escape(w['n'])}</b>\n<code>{escape(w['a'])}</code>" for w in ws) or "Адресов пока нет."
+    await message.answer(f"₿ <b>Кошельки для приёма крипты</b>\n\n{txt}\n\nДобавить: <code>/wallet add USDT-TRC20 адрес</code>\n"
+                         "Удалить: <code>/wallet del USDT-TRC20</code>\nВ названии пиши сеть, чтобы покупатель не ошибся (USDT-TRC20, TON, BTC).")
+
+
+async def api_crypto_claim(request):
+    """Покупатель нажал «Я оплатил»: заказ не отменяется по таймеру, админу приходит запрос на подтверждение."""
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    try:
+        oid = int(data.get("order"))
+    except (TypeError, ValueError):
+        return web.json_response({"ok": False, "msg": "Заказ не найден"})
+    o = get_order(oid)
+    if not o or o["user_id"] != user["id"] or o["status"] not in ("new", "expired"):
+        return web.json_response({"ok": False, "msg": "Заказ недоступен"})
+    tx = _clip(data.get("tx"), 200)
+    with closing(db()) as c:
+        if c.execute("SELECT 1 FROM crypto_inv WHERE invoice_id=?", (-oid,)).fetchone():
+            return web.json_response({"ok": True, "again": True})
+        c.execute("INSERT INTO crypto_inv(invoice_id,kind,ref,user_id,status,created) VALUES(?,?,?,?,'claimed',?)", (-oid, "manual", oid, user["id"], int(time.time())))
+        c.execute("UPDATE orders SET status='new', created=? WHERE id=?", (int(time.time()) + 4 * 3600, oid))   # живёт ещё ~4 часа, пока админ проверяет
+        c.commit()
+    usd = usd_rub()
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✅ Оплата пришла", callback_data=f"cpay:ok:{oid}"),
+                                                InlineKeyboardButton(text="❌ Не пришла", callback_data=f"cpay:no:{oid}")]])
+    try:
+        await bot.send_message(ADMIN_ID, f"₿ <b>Крипто-оплата, заказ #{oid}</b>\n{escape(o['game'])} — {escape(o['label'])}\n"
+                                         f"Сумма: <b>{round(o['stars'] * STAR_RUB):g} ₽</b> ≈ {o['stars'] * STAR_RUB / usd:.2f} $\nИгрок: <code>{escape(o['player'])}</code>\n"
+                                         f"Покупатель: {user['id']}\nХэш/пометка: {escape(tx) or '—'}\n\nПроверь поступление на кошелёк и подтверди.", reply_markup=kb)
+    except Exception as e:
+        logging.warning("crypto claim admin: %s", e)
+    return web.json_response({"ok": True})
+
+
+async def cb_cpay(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    _, act, oid = callback.data.split(":")
+    oid = int(oid)
+    o = get_order(oid)
+    if not o or o["status"] != "new":
+        await callback.answer("Заказ уже обработан", show_alert=True)
+        return
+    with closing(db()) as c:
+        c.execute("UPDATE crypto_inv SET status=? WHERE invoice_id=?", ("paid" if act == "ok" else "rejected", -oid))
+        c.commit()
+    if act == "ok":
+        if mark_paid(oid, "crypto:manual"):
+            await after_paid(oid)
+        await callback.answer("Оплата подтверждена")
+        try:
+            await callback.message.edit_text(callback.message.html_text + "\n\n✅ <b>Подтверждено</b>")
+        except Exception:
+            pass
+    else:
+        set_status(oid, "expired", "new")
+        await safe_send(o["user_id"], f"❌ Заказ #{oid}: оплата криптой не поступила, заказ отменён. Если ты уже перевёл — напиши в поддержку и приложи хэш транзакции.")
+        await callback.answer("Заказ отменён")
+        try:
+            await callback.message.edit_text(callback.message.html_text + "\n\n❌ <b>Отклонено</b>")
+        except Exception:
+            pass
+
+
 async def api_invoice(request):
     user, data = await _auth(request)
     if not user:
@@ -2241,6 +2456,23 @@ async def api_invoice(request):
         return web.json_response({"ok": False, "msg": "Слишком много попыток, подожди пару минут"})
     oid = create_order(uid, pack_id, player, comment, q)
     o = get_order(oid)
+    if data.get("crypto") and not CRYPTO_TOKEN and wallets_get():   # ручной приём на свой кошелёк
+        usd = usd_rub()
+        return web.json_response({"ok": True, "crypto": True, "manual": True, "order": oid, "stars": o["stars"], "rub": round(o["stars"] * STAR_RUB, 2),
+                                  "usd": round(o["stars"] * STAR_RUB / usd + 0.004, 2), "wallets": wallets_get(), "ttl": ORDER_TTL_MIN * 60})
+    if data.get("crypto"):   # оплата криптой через CryptoBot
+        if not CRYPTO_TOKEN:
+            set_status(oid, "expired", "new")
+            return web.json_response({"ok": False, "msg": "Оплата криптой пока не подключена"})
+        try:
+            ci = await crypto_create(uid, "shop", oid, o["stars"], f"{o['game']} — {o['label']}")
+            if not ci["url"]:
+                raise RuntimeError("no url")
+        except Exception as e:
+            logging.warning("crypto invoice: %s", e)
+            set_status(oid, "expired", "new")
+            return web.json_response({"ok": False, "msg": "Не удалось создать крипто-счёт. Попробуй позже"})
+        return web.json_response({"ok": True, "crypto": True, "link": ci["url"], "order": oid, "stars": o["stars"], "rub": ci["rub"], "ttl": ORDER_TTL_MIN * 60})
     if data.get("use_wallet"):   # оплата с внутреннего баланса без счёта Stars
         if not wallet_spend(uid, o["stars"]):
             set_status(oid, "expired", "new")
@@ -3288,6 +3520,8 @@ async def start_api():
     app.router.add_route("*", "/api/seller/verify_req", api_seller_verify_req)
     app.router.add_route("*", "/api/offer_view", api_offer_view)
     app.router.add_route("*", "/api/beat", api_beat)
+    app.router.add_route("*", "/api/crypto/check", api_crypto_check)
+    app.router.add_route("*", "/api/crypto/claim", api_crypto_claim)
     app.router.add_route("*", "/api/notify_set", api_notify_set)
     app.router.add_route("*", "/api/stats", api_stats)
     app.router.add_route("*", "/api/seller/stats", api_seller_stats)
@@ -3644,6 +3878,7 @@ def register_handlers():
     """Подключаем обработчики основного бота и бота продавцов (порядок важен: общий текст — последним)."""
     dp.callback_query.register(cb_done, F.data.startswith("done:"))
     dp.callback_query.register(cb_askcode, F.data.startswith("askcode:"))
+    dp.callback_query.register(cb_cpay, F.data.startswith("cpay:"))
     dp.callback_query.register(cb_cancel, F.data.startswith("cancel:"))
     dp.callback_query.register(cb_reply, F.data.startswith("rp:"))
     dp.callback_query.register(cb_verify, F.data.startswith("vfy:"))
@@ -3705,6 +3940,7 @@ async def main():
     await start_api()
     asyncio.create_task(expire_loop())
     asyncio.create_task(autoconfirm_loop())
+    asyncio.create_task(crypto_loop())
     print(f"✅ {SHOP_NAME} запущен: @{BOT_USERNAME}" + (f" · бот продавцов @{SELLER_BOT_USERNAME}" if SELLER_BOT_USERNAME else ""))
     async def poll_sellers():
         try:

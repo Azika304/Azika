@@ -780,11 +780,14 @@ function openSheet(g, p) {
     <div class="sum" id="sum"></div>
     ${!p.offer && infoText(g, p) ? '<button class="chb" id="infoBtn" style="margin:0 0 10px">📖 Инструкция по покупке</button><div class="odesc infob" id="infoBox" style="display:none">' + esc(infoText(g, p)) + '</div>' : ""}
     <button class="btn" id="payBtn">Оплатить Stars ⭐</button>
+    <button class="btn ghost" id="cryBtn" style="display:none;margin-top:10px"></button>
     <button class="btn ghost" id="walBtn" style="display:none;margin-top:10px"></button>`);
   renderPromoBox(); renderSum(); requote(); bindSellers($("#sheet"));
-  $("#payBtn").onclick = () => pay(false); $("#walBtn").onclick = () => pay(true);
+  $("#payBtn").onclick = () => pay(false); $("#walBtn").onclick = () => pay(true); $("#cryBtn").onclick = () => pay(false, true);
   if ($("#infoBtn")) $("#infoBtn").onclick = () => { const b = $("#infoBox"); b.style.display = b.style.display === "none" ? "" : "none"; haptic(); };
 }
+
+function gift_noCrypto() { return false; }
 
 function renderPromoBox() {
   const b = $("#promoBox"); if (!b) return;
@@ -844,23 +847,62 @@ function renderSum() {
   else rows += `<div class="cbn no">Кэшбэк до ${state.cbPct}% — при оплате от ${state.cbMin} ⭐</div>`;
   rows += `<div class="cbn no">⏱ Счёт действует ${state.ttl} мин, потом заказ отменяется</div>`;
   $("#sum").innerHTML = rows;
+  const cb2 = $("#cryBtn"); if (cb2) { cb2.style.display = state.crypto && !gift_noCrypto() ? "" : "none"; cb2.innerHTML = `₿ Оплатить криптой · ≈ ${Math.round(pay * state.starRub)} ₽`; }
   const wb = $("#walBtn"), wl = q ? (q.wallet || 0) : 0;
   if (wb) { wb.style.display = ""; wb.disabled = false;
     if (wl >= pay) { wb.innerHTML = `💼 Оплатить с баланса · ${wl} ⭐`; wb.onclick = () => pay(true); }
     else { wb.innerHTML = `💼 Пополнить баланс (${wl} ⭐)`; wb.onclick = () => { closeSheet(); setTimeout(balanceScreen, 200); }; } }
 }
 
-async function pay(useWallet) {
+function cryptoManual(r) {
+  const ord = r.order;
+  sheetOpen(`<div class="sh-h"><div style="font-size:44px">₿</div><div><h3>Оплата криптой</h3><p>Заказ #${ord} · ${r.stars} ⭐</p></div></div>
+    <div class="odesc">Переведи <b>${r.usd} $</b> (≈ ${Math.round(r.rub)} ₽) в USDT или эквивалент в другой монете на один из адресов. Сеть выбирай именно ту, что указана. После перевода нажми «Я оплатил».</div>
+    ${r.wallets.map((w, i) => `<div class="row"><label>${esc(w.n)}</label><div class="f" style="word-break:break-all;font-size:13px;user-select:all">${esc(w.a)}</div><button class="chb" data-cp="${i}" style="margin-top:6px">📋 Скопировать адрес</button></div>`).join("")}
+    <div class="row"><label>ХЭШ ТРАНЗАКЦИИ (ПО ЖЕЛАНИЮ)</label><input class="f" id="cryTx" placeholder="Вставь хэш или напиши пометку"></div>
+    <button class="btn" id="cryOk">✅ Я оплатил</button>
+    <div class="cbn no">Админ проверит поступление и подтвердит заказ — обычно в течение нескольких минут.</div>`);
+  document.querySelectorAll("[data-cp]").forEach(b => b.onclick = async () => { const a = r.wallets[+b.dataset.cp].a; try { await navigator.clipboard.writeText(a); } catch (e) {} toast("Адрес скопирован", true); haptic(); });
+  $("#cryOk").onclick = async () => {
+    const b = $("#cryOk"); b.disabled = true; b.innerHTML = '<span class="spn"></span>Отправляю…';
+    try {
+      const c = await api("/api/crypto/claim", { order: ord, tx: $("#cryTx").value.trim() });
+      if (!c.ok) { toast(c.msg || "Ошибка"); b.disabled = false; b.innerHTML = "✅ Я оплатил"; return; }
+      b.innerHTML = "⏳ Ждём подтверждения админа…";
+      const t0 = Date.now();
+      const tick = async () => {
+        if (Date.now() - t0 > 4 * 3600 * 1000) return;
+        try { const k = await api("/api/crypto/check", { order: ord }); if (k.paid) { closeSheet(); showSuccess(ord); return; } } catch (e) {}
+        setTimeout(tick, 6000);
+      };
+      setTimeout(tick, 6000);
+    } catch (e) { toast(e.message || "Нет связи с сервером"); b.disabled = false; b.innerHTML = "✅ Я оплатил"; }
+  };
+}
+
+async function pay(useWallet, crypto) {
   if (state.busy || !state.pack || !state.game) return;
   const player = $("#player").value.trim();
   if (!player) { toast("Введи ID игрока"); return; }
   state.busy = true; const btn = $("#payBtn"); btn.disabled = true; btn.innerHTML = '<span class="spn"></span>Создаю счёт…';
   try {
     const r = await api("/api/invoice", { pack: state.pack.id, player, comment: $("#comment").value.trim(),
-      promo: state.promo && !state.pack.gift && !(state.q && state.q.promo_scope) ? state.promo.code : "", use_bonus: state.useBonus, use_wallet: !!useWallet });
+      promo: state.promo && !state.pack.gift && !(state.q && state.q.promo_scope) ? state.promo.code : "", use_bonus: state.useBonus, use_wallet: !!useWallet, crypto: !!crypto });
     if (!r.ok) { toast(r.msg || "Ошибка"); return; }
     store("pid_" + state.game.kind, player); if (!state.pack.offer && !state.pack.gift) { state.ids = state.ids || {}; state.ids[state.game.id] = player; state.qv = null; }
     if (r.paid) { if (state.promo) { state.promo = null; store("promo", null); } closeSheet(); showSuccess(r.order); return; }
+    if (r.manual) { cryptoManual(r); return; }
+    if (r.crypto) {   // CryptoBot: открываем счёт и ждём подтверждения оплаты
+      if (tg && tg.openTelegramLink) tg.openTelegramLink(r.link); else window.open(r.link, "_blank");
+      toast("Оплати счёт в CryptoBot и вернись сюда — заказ подтвердится сам", true);
+      const t0 = Date.now(), ord = r.order;
+      const tick = async () => {
+        if (Date.now() - t0 > r.ttl * 1000 || document.getElementById("sheet") == null) return;
+        try { const c = await api("/api/crypto/check", { order: ord }); if (c.paid) { if (state.promo) { state.promo = null; store("promo", null); } closeSheet(); showSuccess(ord); return; } } catch (e) {}
+        setTimeout(tick, 4000);
+      };
+      setTimeout(tick, 4000); return;
+    }
     if (!tg || !tg.openInvoice) { location.href = r.link; return; }
     tg.openInvoice(r.link, st => {
       if (st === "paid") { if (state.promo) { state.promo = null; store("promo", null); } closeSheet(); showSuccess(r.order); }
@@ -1403,7 +1445,7 @@ async function init() {
     state.ttl = r.ttl_min || 30; state.fee = r.seller_fee ?? 10; state.feeMin = r.seller_fee_min ?? 4; state.payoutMin = r.payout_min || 100; state.shopRt = r.shop_rating || state.shopRt;
     r.games.forEach(g => { g.packs.forEach(p => p.seller = { id: 0, name: "Azika Shop", shop: true, avg: state.shopRt.avg, count: state.shopRt.count });
       (g.offers || []).forEach(o => { o.offer = true; g.packs.push(o); }); });
-    state.games = r.games; state.support = r.support || state.support; state.refPct = r.ref_percent || 5; state.paused = r.paused || ""; state.cbPct = r.cashback_pct ?? 5; state.cbLevels = r.cashback_levels || []; state.cbMin = r.cashback_min || 100; state.starRub = r.star_rub || 1.59; state.done = r.done || 0;
+    state.games = r.games; state.support = r.support || state.support; state.refPct = r.ref_percent || 5; state.paused = r.paused || ""; state.cbPct = r.cashback_pct ?? 5; state.cbLevels = r.cashback_levels || []; state.cbMin = r.cashback_min || 100; state.crypto = !!r.crypto; state.starRub = r.star_rub || 1.59; state.done = r.done || 0;
     if (params.get("go") === "orders") switchTab("orders"); else showHome();
     api("/api/profile", {}).then(p => { if (p && p.ok) { state.balance = p.bonus; state.ids = p.ids || {}; updBal(); if ($("#qs") && state.qv == null) renderQuick(); } }).catch(() => {});
   } catch (e) {
