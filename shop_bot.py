@@ -245,6 +245,7 @@ def init_db():
         _addcol(c, "sellers", "verify_req", "INTEGER DEFAULT 0")   # когда продавец подал заявку на галочку
         _addcol(c, "sellers", "verify_rej", "INTEGER DEFAULT 0")   # когда заявку отклонили
         _addcol(c, "users", "ref_by", "INTEGER DEFAULT 0")
+        _addcol(c, "users", "friend_got", "INTEGER DEFAULT 0")
         _addcol(c, "users", "bonus", "INTEGER DEFAULT 0")
         _addcol(c, "users", "ref_earned", "INTEGER DEFAULT 0")
         _addcol(c, "users", "photo", "TEXT DEFAULT ''")
@@ -581,6 +582,41 @@ def kv_get(k: str, default: str = "") -> str:
         return default
 
 
+def pay_on(k: str) -> bool:
+    """Способы оплаты включаются и выключаются в админке (kv pay_stars / pay_crypto / pay_wallet)."""
+    return kv_get("pay_" + k, "1") != "0"
+
+
+def friend_bonus() -> int:
+    try:
+        return max(0, min(500, int(kv_get("friend_bonus", "20"))))
+    except ValueError:
+        return 20
+
+
+def _b36(n: int) -> str:
+    d = "0123456789abcdefghijklmnopqrstuvwxyz"
+    out = ""
+    while n:
+        n, r = divmod(n, 36)
+        out = d[r] + out
+    return out or "0"
+
+
+def friend_code(uid: int) -> str:
+    return "AZ" + _b36(uid).upper()
+
+
+def friend_uid(code: str) -> int:
+    code = code.strip().upper()
+    if not code.startswith("AZ") or not re.fullmatch(r"[0-9A-Z]{1,12}", code[2:]):
+        return 0
+    try:
+        return int(code[2:], 36)
+    except ValueError:
+        return 0
+
+
 def sales_paused() -> str:
     """Текст для покупателей, если продажи приостановлены из админ-бота; пустая строка — продажи идут."""
     if kv_get("paused") == "1":
@@ -871,7 +907,8 @@ def profile_data(uid: int) -> dict:
     return {"id": uid, "name": name, "username": username, "orders": done[0], "spent": done[1],
             "bonus": bonus, "earned": earned, "invited": invited, "buyers": buyers,
             "ref_percent": REF_PERCENT, "ref_link": link, "joined": fmt_time(joined), "cb": cb_level(uid),
-            "av": av_url(uid), "av_custom": os.path.exists(_av_custom(uid)), "wallet": wallet_of(uid), "notify": chat_notify_on(uid), "ids": saved_ids(uid)}
+            "av": av_url(uid), "av_custom": os.path.exists(_av_custom(uid)), "wallet": wallet_of(uid), "notify": chat_notify_on(uid), "ids": saved_ids(uid),
+            "friend_code": friend_code(uid), "friend_bound": bool(get_ref_by(uid)), "friend_bonus": friend_bonus()}
 
 
 # ==========================================
@@ -2114,7 +2151,7 @@ async def api_catalog(request):
     return web.json_response({"ok": True, "paused": sales_paused(), "shop": SHOP_NAME, "support": SUPPORT, "ref_percent": REF_PERCENT,
                               "done": done, "star_rub": STAR_RUB, "cashback_pct": max(p for _, p in CB_LEVELS), "cashback_levels": cb_level(0)["levels"],
                               "cashback_min": CASHBACK_MIN, "ttl_min": ORDER_TTL_MIN, "seller_fee": SELLER_FEE, "seller_fee_min": min(_FEES),
-                              "crypto": crypto_on(), "payout_min": PAYOUT_MIN, "seller_bot": SELLER_BOT_USERNAME, "seller_app": SELLER_WEBAPP_URL, "ad_price": AD_PRICE, "shop_rating": dict(zip(("avg", "count"), rating_of(0))),
+                              "crypto": crypto_on() and pay_on("crypto"), "pay": {"stars": pay_on("stars"), "crypto": crypto_on() and pay_on("crypto"), "wallet": pay_on("wallet")}, "payout_min": PAYOUT_MIN, "seller_bot": SELLER_BOT_USERNAME, "seller_app": SELLER_WEBAPP_URL, "ad_price": AD_PRICE, "shop_rating": dict(zip(("avg", "count"), rating_of(0))),
                               "games": catalog()})
 
 
@@ -2128,6 +2165,36 @@ async def api_promo(request):
         return web.json_response({"ok": False, "msg": "Введи промокод"})
     ok, pct, msg = promo_check(user["id"], code)
     return web.json_response({"ok": ok, "pct": pct, "code": code.upper(), "msg": msg})
+
+
+async def api_friend(request):
+    """Код друга: привязывает пригласившего (он получает % с заказов) и начисляет покупателю бонусные баллы."""
+    user, data = await _auth(request)
+    if not user:
+        return _deny()
+    uid = user["id"]
+    code = str(data.get("code", "")).strip()
+    if not code:
+        return web.json_response({"ok": False, "msg": "Введи код друга"})
+    if not rate_ok(-uid - 11, 6, 600):
+        return web.json_response({"ok": False, "msg": "Слишком часто, подожди немного"})
+    fid = friend_uid(code)
+    if not fid or not user_exists(fid):
+        return web.json_response({"ok": False, "msg": "Такого кода нет. Попроси друга прислать код из профиля"})
+    if fid == uid:
+        return web.json_response({"ok": False, "msg": "Свой код вводить нельзя"})
+    if get_ref_by(uid):
+        return web.json_response({"ok": False, "msg": "Друг уже привязан к твоему аккаунту"})
+    if get_ref_by(fid) == uid:
+        return web.json_response({"ok": False, "msg": "Этот код тебе не подходит"})
+    with closing(db()) as c:
+        if c.execute("SELECT 1 FROM orders WHERE user_id=? AND status IN ('paid','delivered','dispute','done') LIMIT 1", (uid,)).fetchone():
+            return web.json_response({"ok": False, "msg": "Код друга можно ввести только до первой покупки"})
+        fb = friend_bonus()
+        c.execute("UPDATE users SET ref_by=?, friend_got=?, bonus=COALESCE(bonus,0)+? WHERE user_id=? AND COALESCE(ref_by,0)=0", (fid, fb, fb, uid))
+        c.commit()
+    asyncio.create_task(welcome_referrer(fid, user.get("first_name", "")))
+    return web.json_response({"ok": True, "bonus": fb, "balance": user_bonus(uid), "msg": f"Код принят: +{fb} баллов" if fb else "Код принят"})
 
 
 async def api_img(request):
@@ -2456,6 +2523,10 @@ async def api_invoice(request):
         return web.json_response({"ok": False, "msg": "Слишком много попыток, подожди пару минут"})
     oid = create_order(uid, pack_id, player, comment, q)
     o = get_order(oid)
+    way = "crypto" if data.get("crypto") else "wallet" if data.get("use_wallet") else "stars"
+    if not pay_on(way):
+        set_status(oid, "expired", "new")
+        return web.json_response({"ok": False, "msg": "Этот способ оплаты сейчас отключён. Выбери другой"})
     if data.get("crypto") and not CRYPTO_TOKEN and wallets_get():   # ручной приём на свой кошелёк
         usd = usd_rub()
         return web.json_response({"ok": True, "crypto": True, "manual": True, "order": oid, "stars": o["stars"], "rub": round(o["stars"] * STAR_RUB, 2),
@@ -3183,6 +3254,8 @@ async def api_wallet_topup(request):
         return web.json_response({"ok": False, "msg": f"Сумма пополнения от {WALLET_MIN} до {WALLET_MAX} ⭐"})
     if not rate_ok(-user["id"] - 7, 8, 600):
         return web.json_response({"ok": False, "msg": "Слишком часто, подожди немного"})
+    if not pay_on("stars"):
+        return web.json_response({"ok": False, "msg": "Пополнение через Stars сейчас отключено"})
     tid = wallet_log(user["id"], "topup", stars, "Пополнение баланса", status="pending")
     try:
         link = await bot.create_invoice_link(title="Пополнение баланса", description=f"Пополнение баланса {SHOP_NAME} на {stars} ⭐. Потом им можно оплачивать заказы.",
@@ -3520,6 +3593,7 @@ async def start_api():
     app.router.add_route("*", "/api/seller/verify_req", api_seller_verify_req)
     app.router.add_route("*", "/api/offer_view", api_offer_view)
     app.router.add_route("*", "/api/beat", api_beat)
+    app.router.add_route("*", "/api/friend", api_friend)
     app.router.add_route("*", "/api/crypto/check", api_crypto_check)
     app.router.add_route("*", "/api/crypto/claim", api_crypto_claim)
     app.router.add_route("*", "/api/notify_set", api_notify_set)

@@ -337,18 +337,39 @@ async function statsSheet(days) {
 }
 
 /* ---------- Ещё ---------- */
+const PAY_NAMES = { stars: ["⭐", "Telegram Stars"], crypto: ["₿", "Криптовалюта на кошелёк"], wallet: ["💼", "Оплата с баланса"] };
+async function paySheet(j) {
+  if (!j) { sheet('<div class="empty">Загрузка…</div>'); j = await api("payments", {}); }
+  if (!j.on) return sheet(`<div class="empty">${esc(j.msg || "Нет данных")}</div>`);
+  sheet(`<div class="t" style="font-size:17px">💳 Способы оплаты</div><div class="mu" style="margin:4px 0 10px">Выключенный способ пропадает у покупателей сразу.</div>
+    ${["stars", "crypto", "wallet"].map(k => `<div class="card"><div class="row"><span class="ico">${PAY_NAMES[k][0]}</span><div class="grow"><div class="t">${PAY_NAMES[k][1]}</div><div class="mu">${j.on[k] ? "Включено" : "Выключено"}${k === "crypto" && !j.wallets.length ? " · нет адресов" : ""}</div></div>
+      <button class="f ${j.on[k] ? "ok" : "no"}" data-pk="${k}" style="min-width:104px">${j.on[k] ? "Включено" : "Выключено"}</button></div></div>`).join("")}
+    <div class="sec">Адреса кошельков (крипта)</div>
+    ${j.wallets.length ? j.wallets.map(w => `<div class="card"><div class="t" style="font-size:14px">${esc(w.n)}</div><div class="mu" style="word-break:break-all;user-select:all">${esc(w.a)}</div><button class="no f" data-wd="${esc(w.n)}" style="width:100%;margin-top:8px">🗑 Удалить адрес</button></div>`).join("") : `<div class="empty">Адресов нет — добавь ниже</div>`}
+    <div class="card"><div class="lbl" style="margin-top:0">Новый адрес</div><input id="wn" placeholder="Сеть, например USDT TRC20" maxlength="30"><input id="wa" placeholder="Адрес кошелька" maxlength="140" style="margin-top:8px"><button class="f" id="wadd" style="width:100%;margin-top:10px">➕ Добавить адрес</button>
+      <div class="mu" style="margin-top:6px">Адрес с тем же названием заменится — так можно поменять старый адрес на новый.</div></div>
+    <div class="sec">Код друга</div>
+    <div class="card"><div class="lbl" style="margin-top:0">Бонус покупателю за код друга, баллов (1 балл = 1 ₽)</div><input id="fb" type="number" inputmode="numeric" min="0" max="500" value="${j.friend_bonus}"><button class="f" id="fbs" style="width:100%;margin-top:10px">Сохранить бонус</button></div>`);
+  const send = async body => { const r = await api("payments", body); if (!r.ok) toast(r.msg || "Ошибка"); else { haptic("medium"); toast("Сохранено"); } paySheet(r.on ? r : undefined); };
+  document.querySelectorAll("[data-pk]").forEach(b => b.onclick = () => send({ key: b.dataset.pk, on: !j.on[b.dataset.pk] }));
+  document.querySelectorAll("[data-wd]").forEach(b => b.onclick = () => { if (confirm("Удалить адрес " + b.dataset.wd + "?")) send({ del: b.dataset.wd }); });
+  $("#wadd").onclick = () => send({ add: { n: $("#wn").value, a: $("#wa").value } });
+  $("#fbs").onclick = () => send({ friend_bonus: $("#fb").value });
+}
+
 async function viewMore() {
   V(`<div class="empty">Загрузка…</div>`);
   const j = await api("overview"); if (tab !== "m") return; if (!j.ok) return V(`<div class="empty">${esc(j.msg || "Нет связи")}</div>`);
   counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge();
   const s = j.stats.shop, v = j.stats.vpn, p = j.pause;
   const sw = (k, ic, n, st) => st === null ? "" : `<div class="card ctl ${st ? "off" : ""}"><div class="row"><span class="ico">${ic}</span><div class="grow"><div class="t" style="font-size:17px">${n}</div><div class="mu">${st ? "Продажи приостановлены" : "Продажи идут"}</div></div></div><div data-sw="${k}">${tg2(st, "▶ Работает", "⏸ Стоп")}</div></div>`;
-  V(`<button class="f" style="width:100%;margin-bottom:12px" id="stbtn">📊 Статистика</button><div class="sec">Продажи</div>${sw("shop", "🛍", "Azika Shop", p.shop)}${sw("vpn", "🔐", "Azika VPN", p.vpn)}
+  V(`<button class="f" style="width:100%;margin-bottom:12px" id="stbtn">📊 Статистика</button><button class="f" style="width:100%;margin-bottom:12px" id="paybtn">💳 Способы оплаты</button><div class="sec">Продажи</div>${sw("shop", "🛍", "Azika Shop", p.shop)}${sw("vpn", "🔐", "Azika VPN", p.vpn)}
   <div class="card"><div class="lbl" style="margin-top:0">Сообщение покупателям на время паузы</div><textarea id="pm" rows="2" maxlength="200">${esc(p.msg)}</textarea><button class="f" style="width:100%;margin-top:10px" id="pmb">Сохранить текст</button></div>
   <div class="btns" style="margin-top:0;margin-bottom:12px"><button class="no f" data-sa="1">⏸ Остановить всё</button><button class="ok f" data-sa="0">▶ Запустить всё</button></div>
   ${s ? `<div class="sec">Шоп</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${s.users}</b></div><div><span class="mu">Сегодня</span><b>${s.today}</b><span class="mu">${s.today_stars}⭐</span></div><div><span class="mu">Всего оплат</span><b>${s.paid}</b><span class="mu">${s.paid_stars}⭐</span></div><div><span class="mu">Ждут выдачи</span><b>${s.wait}</b></div><div><span class="mu">Споры</span><b>${s.disputes}</b></div><div><span class="mu">Продавцов</span><b>${s.sellers}</b><span class="mu">блок ${s.sellers_banned}</span></div></div>` : ""}
   ${v ? `<div class="sec">VPN</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${v.users}</b></div><div><span class="mu">Активных</span><b>${v.active}</b></div><div><span class="mu">Оплат</span><b>${v.payments}</b></div><div><span class="mu">Сегодня</span><b>${v.payments_today}</b></div></div>` : ""}`);
   $("#stbtn").onclick = () => { haptic(); statsSheet(); };
+  $("#paybtn").onclick = () => { haptic(); paySheet(); };
   document.querySelectorAll("[data-sw]").forEach(d => d.onclick = async () => {
     const t = d.firstChild, on = flip(t, d.closest(".card")), r = await api("pause", { which: d.dataset.sw, on }); if (r.ok) { toast(on ? "Продажи остановлены" : "Продажи запущены"); setTimeout(viewMore, 380); } else viewMore();
   });

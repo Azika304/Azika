@@ -1182,10 +1182,62 @@ async def api_pause(d):
     return {"ok": True, "msg": "Сохранено", "pause": {**pause_state(), "msg": kv_get(sdb, "pause_msg", DEFAULT_PAUSE) if shop_ok() else DEFAULT_PAUSE}}
 
 
+PAY_KEYS = ("stars", "crypto", "wallet")
+
+
+def pay_info() -> dict:
+    ok = shop_ok()
+    try:
+        ws = json.loads(kv_get(sdb, "wallets", "[]")) if ok else []
+    except ValueError:
+        ws = []
+    try:
+        fb = int(kv_get(sdb, "friend_bonus", "20")) if ok else 20
+    except ValueError:
+        fb = 20
+    return {"on": {k: (kv_get(sdb, "pay_" + k, "1") != "0") if ok else True for k in PAY_KEYS},
+            "wallets": [w for w in ws if isinstance(w, dict) and w.get("n") and w.get("a")], "friend_bonus": fb}
+
+
+@admin_route
+async def api_payments(d):
+    """Способы оплаты: вкл/выкл, адреса кошельков для крипты, бонус за код друга."""
+    if not shop_ok():
+        return {"ok": False, "msg": "База магазина недоступна"}
+    cur = pay_info()
+    if "key" in d:
+        k = str(d.get("key"))
+        if k not in PAY_KEYS:
+            return {"ok": False, "msg": "Некорректный запрос"}
+        on = bool(d.get("on"))
+        after = {**cur["on"], k: on}
+        if not (after["stars"] or (after["crypto"] and cur["wallets"])):
+            return {"ok": False, "msg": "Должен остаться включённым хотя бы Stars или крипта с адресом", **cur}
+        kv_set(sdb, "pay_" + k, "1" if on else "0")
+    if d.get("add"):
+        a = d["add"] if isinstance(d["add"], dict) else {}
+        n, ad = re.sub(r"\s+", " ", str(a.get("n", ""))).strip().upper()[:30], str(a.get("a", "")).strip()
+        if not n or not 10 <= len(ad) <= 140 or re.search(r"\s", ad):
+            return {"ok": False, "msg": "Укажи название сети и адрес без пробелов", **cur}
+        kv_set(sdb, "wallets", json.dumps([w for w in cur["wallets"] if w["n"] != n] + [{"n": n, "a": ad}], ensure_ascii=False))
+    if d.get("del"):
+        n = str(d["del"]).strip().upper()
+        left = [w for w in cur["wallets"] if w["n"] != n]
+        if not left and not cur["on"]["stars"]:
+            return {"ok": False, "msg": "Нельзя удалить последний адрес, пока Stars выключены", **cur}
+        kv_set(sdb, "wallets", json.dumps(left, ensure_ascii=False))
+    if "friend_bonus" in d:
+        try:
+            kv_set(sdb, "friend_bonus", str(max(0, min(500, int(d["friend_bonus"])))))
+        except (TypeError, ValueError):
+            return {"ok": False, "msg": "Бонус — число от 0 до 500", **cur}
+    return {"ok": True, "msg": "Сохранено", **pay_info()}
+
+
 def build_api() -> web.Application:
     app = web.Application(client_max_size=1024 * 1024)
     for name, fn in (("stats", api_stats), ("overview", api_overview), ("queue", api_queue), ("decide", api_decide), ("sellers", api_sellers), ("seller", api_seller),
-                     ("seller_act", api_seller_act), ("chats", api_chats), ("chat", api_chat), ("chat_send", api_chat_send), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause)):
+                     ("seller_act", api_seller_act), ("chats", api_chats), ("chat", api_chat), ("chat_send", api_chat_send), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause), ("payments", api_payments)):
         app.router.add_post(f"/api/{name}", fn)
     return app
 

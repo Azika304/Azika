@@ -20,6 +20,10 @@
   --glow1:rgba(139,92,246,.3); --glow2:rgba(255,79,163,.16); --glow3:rgba(46,230,166,.14);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+.cmseg{display:flex;gap:6px;margin:0 0 10px;padding:4px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.cmseg button{flex:1;border:0;background:transparent;color:var(--muted);font:inherit;font-weight:800;font-size:13px;padding:9px 6px;border-radius:11px;cursor:pointer}
+.cmseg button.on{background:var(--grad);color:#fff}
+.fcode{display:flex;align-items:center;gap:8px;margin-top:8px}.fcode b{font-family:Unbounded,sans-serif;letter-spacing:.06em;font-size:16px;flex:1;user-select:all}
 html,body{margin:0;color:var(--text);font-family:Manrope,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg)}
 body{min-height:100vh;overflow-x:hidden;padding:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) 0 calc(96px + env(safe-area-inset-bottom));
   background:radial-gradient(900px 520px at 8% -8%,var(--glow1),transparent 62%),radial-gradient(700px 520px at 105% 6%,var(--glow2),transparent 62%),radial-gradient(640px 520px at 50% 112%,var(--glow3),transparent 62%),var(--bg);
@@ -775,22 +779,41 @@ function openSheet(g, p) {
       <input class="f" id="player" autocomplete="off" autocapitalize="off" ${g.kind === "numeric" ? 'inputmode="numeric"' : ""} value="${esc(saved)}" placeholder="${g.kind === "numeric" ? "123456789" : g.kind === "gift" ? "@username или name@mail.com" : "#ABC123 или e-mail"}">
       <div class="hint">${g.kind === "gift" ? "Код карты пришлёт этот бот сообщением в Telegram после оплаты. Контакт нужен на случай, если бот не сможет написать." : g.kind === "numeric" ? "ID в профиле игры. Проверь внимательно — пополнение пойдёт на этот ID." : "Тег виден в профиле. Для входа мы можем написать тебе в Telegram."}</div></div>
     <div class="row"><label>КОММЕНТАРИЙ (НЕОБЯЗАТЕЛЬНО)</label><textarea class="f" id="comment" maxlength="200" placeholder="Сервер, ник, удобное время"></textarea></div>
-    ${p.gift ? "" : '<div class="row"><label>ПРОМОКОД</label><div id="promoBox"></div></div>'}
+    ${p.gift ? "" : '<div class="row"><div class="cmseg" id="cmSeg"><button data-m="promo">🎟 Промокод</button><button data-m="friend">👥 Код друга</button></div><div id="promoBox"></div></div>'}
     <div id="bonusRow"></div>
     <div class="sum" id="sum"></div>
     ${!p.offer && infoText(g, p) ? '<button class="chb" id="infoBtn" style="margin:0 0 10px">📖 Инструкция по покупке</button><div class="odesc infob" id="infoBox" style="display:none">' + esc(infoText(g, p)) + '</div>' : ""}
     <button class="btn" id="payBtn">Оплатить Stars ⭐</button>
     <button class="btn ghost" id="cryBtn" style="display:none;margin-top:10px"></button>
     <button class="btn ghost" id="walBtn" style="display:none;margin-top:10px"></button>`);
-  renderPromoBox(); renderSum(); requote(); bindSellers($("#sheet"));
+  state.cmode = state.cmode || "promo"; renderPromoBox(); renderSum(); requote(); bindSellers($("#sheet"));
+  document.querySelectorAll("#cmSeg button").forEach(b => b.onclick = () => { state.cmode = b.dataset.m; haptic(); renderPromoBox(); });
   $("#payBtn").onclick = () => pay(false); $("#walBtn").onclick = () => pay(true); $("#cryBtn").onclick = () => pay(false, true);
   if ($("#infoBtn")) $("#infoBtn").onclick = () => { const b = $("#infoBox"); b.style.display = b.style.display === "none" ? "" : "none"; haptic(); };
 }
 
 function gift_noCrypto() { return false; }
 
+function renderFriendBox(b) {
+  const f = state.friend || {};
+  if (f.bound) { b.innerHTML = `<span class="pill">👥 Друг привязан ✓</span><div class="pm" style="margin-top:6px">Друг получает ${state.refPct}% баллами с твоих заказов.</div>`; return; }
+  b.innerHTML = `<div class="promo"><input class="f" id="frIn" placeholder="AZ12AB" autocomplete="off" maxlength="14" style="text-transform:uppercase"><button class="mini" id="frBtn">Применить</button></div>
+    <div class="pm" style="margin-top:6px">Введи код друга — получишь <b>+${f.bonus != null ? f.bonus : 20} баллов</b> на баланс, а друг будет получать ${state.refPct}% баллами с твоих заказов. Работает до первой покупки.</div><div id="frMsg"></div>`;
+  $("#frBtn").onclick = async () => {
+    const code = $("#frIn").value.trim(); if (!code) return;
+    try {
+      const r = await api("/api/friend", { code });
+      if (r.ok) { state.friend = { ...f, bound: true }; state.balance = r.balance; updBal(); toast(r.msg || "Код принят", true); haptic("medium"); renderFriendBox(b); renderSum(); requote(); }
+      else $("#frMsg").innerHTML = `<div class="pm bad">${esc(r.msg || "Не подходит")}</div>`;
+    } catch (e) { $("#frMsg").innerHTML = `<div class="pm bad">${esc(e.message || "Нет связи")}</div>`; }
+  };
+  $("#frIn").addEventListener("keydown", e => { if (e.key === "Enter") $("#frBtn").click(); });
+}
+
 function renderPromoBox() {
   const b = $("#promoBox"); if (!b) return;
+  document.querySelectorAll("#cmSeg button").forEach(x => x.classList.toggle("on", x.dataset.m === (state.cmode || "promo")));
+  if (state.cmode === "friend") { renderFriendBox(b); return; }
   if (state.promo && !(state.promoMsg && !state.promoMsg.ok)) {
     b.innerHTML = `<span class="pill">🎟 ${esc(state.promo.code)} · −${state.promo.pct}% <u id="pClr">✕</u></span>${state.promoNote ? `<div class="pm bad">${esc(state.promoNote)}</div>` : ""}`;
     $("#pClr").onclick = () => { state.promo = null; store("promo", null); state.promoMsg = null; renderPromoBox(); renderSum(); requote(); haptic(); };
@@ -847,9 +870,11 @@ function renderSum() {
   else rows += `<div class="cbn no">Кэшбэк до ${state.cbPct}% — при оплате от ${state.cbMin} ⭐</div>`;
   rows += `<div class="cbn no">⏱ Счёт действует ${state.ttl} мин, потом заказ отменяется</div>`;
   $("#sum").innerHTML = rows;
+  const pb = $("#payBtn"); if (pb) pb.style.display = !state.pay || state.pay.stars ? "" : "none";
   const cb2 = $("#cryBtn"); if (cb2) { cb2.style.display = state.crypto && !gift_noCrypto() ? "" : "none"; cb2.innerHTML = `₿ Оплатить криптой · ≈ ${Math.round(pay * state.starRub)} ₽`; }
   const wb = $("#walBtn"), wl = q ? (q.wallet || 0) : 0;
-  if (wb) { wb.style.display = ""; wb.disabled = false;
+  if (wb && state.pay && !state.pay.wallet) wb.style.display = "none";
+  else if (wb) { wb.style.display = ""; wb.disabled = false;
     if (wl >= pay) { wb.innerHTML = `💼 Оплатить с баланса · ${wl} ⭐`; wb.onclick = () => pay(true); }
     else { wb.innerHTML = `💼 Пополнить баланс (${wl} ⭐)`; wb.onclick = () => { closeSheet(); setTimeout(balanceScreen, 200); }; } }
 }
@@ -1247,7 +1272,7 @@ async function showProfile() {
   try {
     const p = await api("/api/profile", {});
     if (!p.ok) throw new Error(p.msg || "Ошибка");
-    state.balance = p.bonus; updBal(); p.cb = cbOf(p);
+    state.balance = p.bonus; state.friend = { bound: !!p.friend_bound, bonus: p.friend_bonus, code: p.friend_code }; updBal(); p.cb = cbOf(p);
     const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user || {};
     const nm = p.name || u.first_name || "Игрок";
     view(`
@@ -1266,6 +1291,7 @@ async function showProfile() {
         <button class="btn ghost" id="pcOpen">${state.promo ? "Изменить промокод" : "Ввести промокод"}</button></div>
       <div class="card ref up" style="--i:3"><h4>🎁 Приглашай друзей</h4>
         <p>Получай <b>${p.ref_percent}%</b> бонусами с каждого выполненного заказа друга. Бонусами можно оплатить часть заказа.</p>
+        <div class="fcode"><span style="color:var(--muted);font-size:12px">Твой код друга</span><b>${esc(p.friend_code || "")}</b><button class="mini" id="cpc">Копировать</button></div>
         <div class="lk"><div>${esc(p.ref_link)}</div><button id="cp">Копировать</button></div>
         <button class="sh" id="shr">Поделиться ссылкой</button>
         <div class="rs"><div><b data-n="${p.invited}">0</b><span>приглашено</span></div><div><b data-n="${p.buyers}">0</b><span>купили</span></div><div><b data-n="${p.earned}">0</b><span>заработано баллов</span></div></div></div>`);
@@ -1280,6 +1306,7 @@ async function showProfile() {
     $("#lvl").onclick = () => { haptic(); store("lvl_seen2", "1"); $("#lvl").classList.remove("pulse"); const t = document.querySelector(".tapme"); if (t) t.remove(); levelSheet(p); };
     renderSellerCard();
     const link = p.ref_link;
+    $("#cpc").onclick = async () => { try { await navigator.clipboard.writeText(p.friend_code); } catch (e) {} haptic(); toast("Код скопирован", true); };
     $("#cp").onclick = async () => {
       try { await navigator.clipboard.writeText(link); } catch (e) {
         const t = document.createElement("textarea"); t.value = link; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); } catch (_) {} t.remove();
@@ -1445,9 +1472,9 @@ async function init() {
     state.ttl = r.ttl_min || 30; state.fee = r.seller_fee ?? 10; state.feeMin = r.seller_fee_min ?? 4; state.payoutMin = r.payout_min || 100; state.shopRt = r.shop_rating || state.shopRt;
     r.games.forEach(g => { g.packs.forEach(p => p.seller = { id: 0, name: "Azika Shop", shop: true, avg: state.shopRt.avg, count: state.shopRt.count });
       (g.offers || []).forEach(o => { o.offer = true; g.packs.push(o); }); });
-    state.games = r.games; state.support = r.support || state.support; state.refPct = r.ref_percent || 5; state.paused = r.paused || ""; state.cbPct = r.cashback_pct ?? 5; state.cbLevels = r.cashback_levels || []; state.cbMin = r.cashback_min || 100; state.crypto = !!r.crypto; state.starRub = r.star_rub || 1.59; state.done = r.done || 0;
+    state.games = r.games; state.support = r.support || state.support; state.refPct = r.ref_percent || 5; state.paused = r.paused || ""; state.cbPct = r.cashback_pct ?? 5; state.cbLevels = r.cashback_levels || []; state.cbMin = r.cashback_min || 100; state.crypto = !!r.crypto; state.pay = r.pay || { stars: true, crypto: !!r.crypto, wallet: true }; state.starRub = r.star_rub || 1.59; state.done = r.done || 0;
     if (params.get("go") === "orders") switchTab("orders"); else showHome();
-    api("/api/profile", {}).then(p => { if (p && p.ok) { state.balance = p.bonus; state.ids = p.ids || {}; updBal(); if ($("#qs") && state.qv == null) renderQuick(); } }).catch(() => {});
+    api("/api/profile", {}).then(p => { if (p && p.ok) { state.balance = p.bonus; state.friend = { bound: !!p.friend_bound, bonus: p.friend_bonus, code: p.friend_code }; state.ids = p.ids || {}; updBal(); if ($("#qs") && state.qv == null) renderQuick(); } }).catch(() => {});
   } catch (e) {
     view(`<div class="err">Не удалось загрузить каталог.<br>${esc(e.message || "")}<br><button onclick="init()">Повторить</button></div>`);
   }
