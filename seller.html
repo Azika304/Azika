@@ -183,6 +183,9 @@ input.f:focus,textarea.f:focus{border-color:var(--a1)}textarea.f{resize:none;hei
 .sth{font-size:12px;font-weight:800;color:var(--muted);margin:16px 0 4px;letter-spacing:.3px}
 .me .hbg{width:40px;height:40px;font-size:18px;flex:none}.me .tapme{display:none}
 .pls{padding:4px 6px 22px;margin:-4px -6px -12px}
+
+/* полноэкранный режим: плотная полоса под системной шапкой Telegram, чтобы прокручиваемый контент не просвечивал под кнопками */
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px));background:var(--bg);z-index:60;pointer-events:none}
 </style>
 </head>
 <body>

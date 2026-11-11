@@ -10,9 +10,9 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 -apple-system,Segoe UI,Roboto,sans-serif}
 body{padding:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) 16px calc(96px + env(safe-area-inset-bottom));min-height:100vh;background:radial-gradient(600px 300px at 80% -50px,#312e8155,transparent),var(--bg)}
-h1{font-size:22px;margin:18px 0 12px;display:flex;align-items:center;gap:10px}
+h1{font-size:20px;margin:18px 0 12px;display:flex;align-items:center;gap:10px}
 h1 b{color:var(--ac2)}
-.onl{margin-left:auto;font-size:13px;font-weight:800;padding:6px 11px;border-radius:99px;background:#22c55e22;border:1px solid #22c55e55;color:#86efac;white-space:nowrap}
+.onl{margin-left:auto;font-size:12px;line-height:1.2;font-weight:800;padding:5px 10px;text-align:center;flex:none;border-radius:99px;background:#22c55e22;border:1px solid #22c55e55;color:#86efac;white-space:nowrap}
 .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}
 .row{display:flex;align-items:center;gap:12px}
 .grow{flex:1;min-width:0}
@@ -94,6 +94,9 @@ button{transition:transform .12s,background .2s,opacity .2s}
 .kp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.kp>div{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:12px}.kp b{display:block;font-size:20px;font-weight:800}.kp span{font-size:11.5px;color:var(--mu);font-weight:700}
 .hb{margin:8px 0}.hb .t{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:4px;gap:8px}.hb .t span:last-child{color:var(--mu);white-space:nowrap}.hb .b{height:8px;border-radius:99px;background:var(--line);overflow:hidden}.hb .b i{display:block;height:100%;border-radius:99px;background:var(--ac)}
 .sth{font-size:12px;font-weight:800;color:var(--mu);margin:16px 0 4px;letter-spacing:.3px}
+
+/* полноэкранный режим: плотная полоса под системной шапкой Telegram, чтобы прокручиваемый контент не просвечивал под кнопками */
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px));background:var(--bg);z-index:60;pointer-events:none}
 </style>
 </head>
 <body>
@@ -377,7 +380,7 @@ async function viewMore() {
   $("#pmb").onclick = async () => { const r = await api("pause", { which: "all", text: $("#pm").value }); if (r.ok) toast("Текст сохранён"); };
 }
 
-const onl = j => { if (j && j.online && $("#onl")) $("#onl").textContent = "🟢 " + j.online.now + " онлайн · " + j.online.day + " за сутки"; };
+const onl = j => { if (j && j.online && $("#onl")) $("#onl").innerHTML = "🟢 " + j.online.now + " онлайн<br><span style=\"font-weight:600;opacity:.8\">" + j.online.day + " за сутки</span>"; };
 setInterval(() => { if (!document.hidden) api("overview", { quiet: true }).then(j => { if (j.ok) { onl(j); counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge(); } }); }, 25000);
 setTab("q");
 api("overview", { quiet: true }).then(j => { if (j.ok) { onl(j); counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge(); } });
