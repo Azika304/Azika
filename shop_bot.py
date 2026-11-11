@@ -246,6 +246,7 @@ def init_db():
         _addcol(c, "sellers", "verify_rej", "INTEGER DEFAULT 0")   # когда заявку отклонили
         _addcol(c, "users", "ref_by", "INTEGER DEFAULT 0")
         _addcol(c, "users", "friend_got", "INTEGER DEFAULT 0")
+        _addcol(c, "users", "banned", "INTEGER DEFAULT 0")
         _addcol(c, "users", "bonus", "INTEGER DEFAULT 0")
         _addcol(c, "users", "ref_earned", "INTEGER DEFAULT 0")
         _addcol(c, "users", "photo", "TEXT DEFAULT ''")
@@ -2107,6 +2108,10 @@ async def _auth(request):
     user = verify_init_data(str(data.get("initData", "")))
     if user:
         touch_seen(user["id"])
+        with closing(db()) as c:
+            bn = c.execute("SELECT COALESCE(banned,0) FROM users WHERE user_id=?", (user["id"],)).fetchone()
+        if bn and bn[0] and user["id"] != ADMIN_ID:
+            raise web.HTTPForbidden(text=json.dumps({"ok": False, "msg": "🚫 Доступ ограничен. Вопросы — в поддержку"}), content_type="application/json")
         ref = parse_ref(user.get("_sp", ""))
         if ensure_user(user["id"], user.get("first_name", ""), user.get("username", ""), ref) and get_ref_by(user["id"]):
             asyncio.create_task(welcome_referrer(get_ref_by(user["id"]), user.get("first_name", "")))

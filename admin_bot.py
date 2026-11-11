@@ -85,6 +85,7 @@ def ensure_schema():
             _addcol(c, "sellers", "verify_req", "INTEGER DEFAULT 0")
             _addcol(c, "sellers", "verify_rej", "INTEGER DEFAULT 0")
             _addcol(c, "sellers", "review", "INTEGER DEFAULT 0")
+            _addcol(c, "users", "banned", "INTEGER DEFAULT 0")
             c.execute("CREATE TABLE IF NOT EXISTS seen(user_id INTEGER PRIMARY KEY, ts INTEGER)")
             c.execute("CREATE TABLE IF NOT EXISTS admin_msgs(id INTEGER PRIMARY KEY AUTOINCREMENT, seller_id INTEGER, from_admin INTEGER, text TEXT, created INTEGER, read INTEGER DEFAULT 0)")
             c.commit()
@@ -1066,8 +1067,8 @@ def online_info() -> dict:
     now = int(time.time())
     try:
         with sdb() as c:
-            a = c.execute("SELECT COUNT(*) FROM seen WHERE ts>=?", (now - 75,)).fetchone()[0]
-            b = c.execute("SELECT COUNT(*) FROM seen WHERE ts>=?", (now - 86400,)).fetchone()[0]
+            a = c.execute("SELECT COUNT(*) FROM seen WHERE ts>=? AND user_id!=?", (now - 75, ADMIN_ID)).fetchone()[0]
+            b = c.execute("SELECT COUNT(*) FROM seen WHERE ts>=? AND user_id!=?", (now - 86400, ADMIN_ID)).fetchone()[0]
         return {"now": a, "day": b}
     except Exception:
         return {"now": 0, "day": 0}
@@ -1182,6 +1183,63 @@ async def api_pause(d):
     return {"ok": True, "msg": "Сохранено", "pause": {**pause_state(), "msg": kv_get(sdb, "pause_msg", DEFAULT_PAUSE) if shop_ok() else DEFAULT_PAUSE}}
 
 
+def users_online(mode: str) -> dict:
+    """Кто сейчас в приложениях (mode=now, окно 75 с) или открывал их за сутки (mode=day)."""
+    if not shop_ok():
+        return {"users": [], "now": 0, "day": 0}
+    now = int(time.time())
+    since = now - (75 if mode == "now" else 86400)
+    with sdb() as c:
+        rows = c.execute(
+            "SELECT s.user_id,s.ts,u.name,u.username,COALESCE(u.banned,0),sl.status,COALESCE(sl.verified,0),COALESCE(sl.verify_req,0),"
+            "(SELECT COUNT(*) FROM orders o WHERE o.user_id=s.user_id AND o.status IN ('paid','delivered','dispute','done')),"
+            "(SELECT COALESCE(SUM(o.stars),0) FROM orders o WHERE o.user_id=s.user_id AND o.status IN ('paid','delivered','dispute','done')) "
+            "FROM seen s LEFT JOIN users u ON u.user_id=s.user_id LEFT JOIN sellers sl ON sl.user_id=s.user_id WHERE s.ts>=? AND s.user_id!=? ORDER BY s.ts DESC LIMIT 150", (since, ADMIN_ID)).fetchall()
+    out = []
+    for uid, ts, name, un, banned, sst, ver, vreq, orders, spent in rows:
+        role = {"approved": "seller", "pending": "pending", "banned": "sbanned"}.get(sst or "", "buyer")
+        out.append({"id": uid, "name": name or (("@" + un) if un else f"id{uid}"), "username": un or "", "av": av_path(uid), "ts": ts, "ago": max(0, now - ts),
+                    "online": now - ts < 75, "role": role, "banned": bool(banned) or role == "sbanned", "verified": bool(ver), "verify_req": bool(vreq) and not ver,
+                    "orders": orders, "spent": spent})
+    return {"users": out, **online_info()}
+
+
+@admin_route
+async def api_online_users(d):
+    mode = "now" if str(d.get("mode")) == "now" else "day"
+    return {"ok": True, **users_online(mode)}
+
+
+@admin_route
+async def api_user_act(d):
+    """Действия над любым пользователем: написать (через бота магазина), заблокировать, разблокировать."""
+    try:
+        uid = int(d.get("id", 0))
+    except (TypeError, ValueError):
+        return {"ok": False, "msg": "Некорректный запрос"}
+    act = str(d.get("act", ""))
+    if not uid or not shop_ok() or uid == ADMIN_ID:
+        return {"ok": False, "msg": "Нельзя применить к этому пользователю"}
+    if act == "msg":
+        text = str(d.get("text", "")).strip()[:1000]
+        if not text:
+            return {"ok": False, "msg": "Введи сообщение"}
+        ok = await notify_seller(uid, f"✉️ <b>Сообщение от администрации:</b>\n{escape(text)}")
+        return {"ok": ok, "msg": "✅ Отправлено" if ok else "Не доставлено: пользователь не запускал бота или заблокировал его"}
+    if act not in ("ban", "unban"):
+        return {"ok": False, "msg": "Некорректный запрос"}
+    ban = act == "ban"
+    with sdb() as c:
+        c.execute("UPDATE users SET banned=? WHERE user_id=?", (1 if ban else 0, uid))
+        sl = c.execute("SELECT status FROM sellers WHERE user_id=?", (uid,)).fetchone()
+        c.commit()
+    if sl and sl[0] in ("approved", "banned"):
+        await do_seller_act(uid, "ban" if ban else "unban")   # у продавца ещё скрываются/возвращаются товары и уходит уведомление
+    else:
+        await notify_seller(uid, "🚫 Доступ к Azika Shop ограничен. Вопросы — в поддержку." if ban else "✅ Доступ к Azika Shop восстановлен.")
+    return {"ok": True, "msg": "🚫 Заблокирован" if ban else "✅ Разблокирован"}
+
+
 PAY_KEYS = ("stars", "crypto", "wallet")
 
 
@@ -1237,7 +1295,7 @@ async def api_payments(d):
 def build_api() -> web.Application:
     app = web.Application(client_max_size=1024 * 1024)
     for name, fn in (("stats", api_stats), ("overview", api_overview), ("queue", api_queue), ("decide", api_decide), ("sellers", api_sellers), ("seller", api_seller),
-                     ("seller_act", api_seller_act), ("chats", api_chats), ("chat", api_chat), ("chat_send", api_chat_send), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause), ("payments", api_payments)):
+                     ("seller_act", api_seller_act), ("chats", api_chats), ("chat", api_chat), ("chat_send", api_chat_send), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause), ("payments", api_payments), ("online_users", api_online_users), ("user_act", api_user_act)):
         app.router.add_post(f"/api/{name}", fn)
     return app
 

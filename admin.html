@@ -12,6 +12,9 @@ html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 -apple-sys
 body{padding:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) 16px calc(96px + env(safe-area-inset-bottom));min-height:100vh;background:radial-gradient(600px 300px at 80% -50px,#312e8155,transparent),var(--bg)}
 h1{font-size:20px;margin:18px 0 12px;display:flex;align-items:center;gap:10px}
 h1 b{color:var(--ac2)}
+.vb{color:#34d399;font-weight:800;font-size:.92em}
+.onl{cursor:pointer}
+.urow .grow{min-width:0}.urow .mu{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .onl{margin-left:auto;font-size:12px;line-height:1.2;font-weight:800;padding:5px 10px;text-align:center;flex:none;border-radius:99px;background:#22c55e22;border:1px solid #22c55e55;color:#86efac;white-space:nowrap}
 .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}
 .row{display:flex;align-items:center;gap:12px}
@@ -186,12 +189,12 @@ function viewSellers() {
 const stPill = s => s.status === "banned" ? `<span class="pill r">заблокирован</span>` : s.status === "pending" ? `<span class="pill y">заявка</span>` : s.review ? `<span class="pill y">🔍 проверка</span>` : "";
 async function loadSellers() {
   const j = await api("sellers", { page: 0, mode: smode, q: sq }); const box = $("#sl"); if (!box || !j.ok) return;
-  box.innerHTML = j.sellers.length ? j.sellers.map(s => `<div class="card" data-s="${s.id}" style="cursor:pointer"><div class="row">${av(s.av, s.name)}<div class="grow"><div class="t">${esc(s.name)}${s.verified ? " ✅" : ""}</div><div class="mu">${esc(s.name_lvl)} · сделок ${s.deals} · ${s.offers} товаров</div></div>${stPill(s)}${s.verify_req && !s.verified ? `<span class="pill y">✓?</span>` : ""}</div></div>`).join("") : `<div class="empty">Никого не найдено</div>`;
+  box.innerHTML = j.sellers.length ? j.sellers.map(s => `<div class="card" data-s="${s.id}" style="cursor:pointer"><div class="row">${av(s.av, s.name)}<div class="grow"><div class="t">${esc(s.name)}</div><div class="mu">${s.verified ? '<span class="vb">✓ проверен</span> · ' : ""}${esc(s.name_lvl)} · сделок ${s.deals} · ${s.offers} товаров</div></div>${stPill(s)}${s.verify_req && !s.verified ? `<span class="pill y">✓?</span>` : ""}</div></div>`).join("") : `<div class="empty">Никого не найдено</div>`;
   box.querySelectorAll("[data-s]").forEach(c => c.onclick = () => openSeller(j.sellers.find(x => x.id == c.dataset.s)));
 }
 function openSeller(s) {
   const L = s.levels;
-  sheet(`<div class="row">${av(s.av, s.name)}<div class="grow"><div class="t" style="font-size:17px">${esc(s.name)}${s.verified ? " ✅" : ""}</div><div class="mu">ID ${s.id}${s.username ? " · @" + esc(s.username) : ""}</div></div>${stPill(s)}</div>
+  sheet(`<div class="row">${av(s.av, s.name)}<div class="grow"><div class="t" style="font-size:17px">${esc(s.name)}</div><div class="mu">${s.verified ? '<span class="vb">✓ проверен</span> · ' : ""}ID ${s.id}${s.username ? " · @" + esc(s.username) : ""}</div></div>${stPill(s)}</div>
   <div class="kpi" style="margin-top:14px"><div><span class="mu">Уровень</span><b>${esc(s.name_lvl)}</b><span class="mu">комиссия ${s.fee}% · лимит ${s.limit}${s.lvl_set ? " · ручной" : ""}</span></div>
   <div><span class="mu">Сделки / отзывы</span><b>${s.deals} / ${s.cnt}</b><span class="mu">${s.avg ? "★ " + s.avg : "без оценок"}</span></div>
   <div><span class="mu">Баланс</span><b>${s.balance}⭐</b><span class="mu">заработано ${s.earned}⭐</span></div>
@@ -245,7 +248,7 @@ async function viewChatsTab() {
   counts.chat = j.chats.reduce((x, c) => x + c.unread, 0); badge();
   const F = { all: j.chats, rev: j.chats.filter(c => c.review), un: j.chats.filter(c => c.unread) }, list = F[cfilter] || j.chats;
   V(`<div class="seg">${[["all", "Все", F.all.length], ["rev", "🔍 На проверке", F.rev.length], ["un", "Непрочитанные", F.un.length]].map(([k, n, c]) => `<button data-f="${k}" class="${cfilter === k ? "on" : ""}">${n}${c ? ` · ${c}` : ""}</button>`).join("")}</div>`
-    + (list.length ? list.map(c => `<div class="card" data-c="${c.id}" style="cursor:pointer"><div class="row">${av(c.av, c.name)}<div class="grow"><div class="t">${esc(c.name)}${c.verified ? " ✅" : ""}${c.review ? ` <span class="pill y">🔍 проверка</span>` : ""}</div><div class="mu" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.last ? (c.mine ? "Вы: " : "") + esc(c.last) : "Переписки пока нет"}</div>${seenHtml(c.seen, c.online) ? `<div class="mu" style="font-size:11px;margin-top:2px">${seenHtml(c.seen, c.online)}</div>` : ""}</div>${c.unread ? `<i class="badge" style="position:static">${c.unread}</i>` : `<span class="mu">${ago(c.t)}</span>`}</div></div>`).join("")
+    + (list.length ? list.map(c => `<div class="card" data-c="${c.id}" style="cursor:pointer"><div class="row">${av(c.av, c.name)}<div class="grow"><div class="t">${esc(c.name)}${c.verified ? ' <span class="vb">✓</span>' : ""}${c.review ? ` <span class="pill y">🔍 проверка</span>` : ""}</div><div class="mu" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.last ? (c.mine ? "Вы: " : "") + esc(c.last) : "Переписки пока нет"}</div>${seenHtml(c.seen, c.online) ? `<div class="mu" style="font-size:11px;margin-top:2px">${seenHtml(c.seen, c.online)}</div>` : ""}</div>${c.unread ? `<i class="badge" style="position:static">${c.unread}</i>` : `<span class="mu">${ago(c.t)}</span>`}</div></div>`).join("")
       : `<div class="empty">${cfilter === "rev" ? "Сейчас никто не на проверке" : cfilter === "un" ? "Новых сообщений нет" : "Чатов пока нет"}<br><span style="font-size:13px">Вызови продавца на проверку или нажми «💬 Чат» в его карточке — он появится здесь.</span></div>`)
     + `<button class="pr" style="width:100%;margin-top:4px" id="cnew">✏️ Написать продавцу</button>`);
   document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { cfilter = b.dataset.f; haptic(); viewChatsTab(); });
@@ -264,7 +267,7 @@ async function loadChat(first) {
 async function openChat(id) {
   chatId = id; clearInterval(chatTimer);
   const j = await api("seller", { id }); if (!j.ok) return; const s = j.seller;
-  sheet(`<div class="row">${av(s.av, s.name)}<div class="grow"><div class="t" style="font-size:17px">${esc(s.name)}${s.verified ? " ✅" : ""}</div><div class="mu" id="cst">Чат с продавцом · без его разрешения</div></div><button id="cback">‹</button></div>
+  sheet(`<div class="row">${av(s.av, s.name)}<div class="grow"><div class="t" style="font-size:17px">${esc(s.name)}${s.verified ? ' <span class="vb">✓</span>' : ""}</div><div class="mu" id="cst">Чат с продавцом · без его разрешения</div></div><button id="cback">‹</button></div>
   <div id="rvb"></div><div id="msgs" style="margin-top:10px"></div>
   <div class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ct" rows="1" placeholder="Сообщение…" style="max-height:110px"></textarea><button class="pr" id="csend">➤</button></div>
   <div class="btns" style="margin-top:8px"><button class="f" id="crev">${s.review ? "✅ Завершить проверку" : "🔍 Вызвать на проверку"}</button></div>`);
@@ -360,6 +363,35 @@ async function paySheet(j) {
   $("#fbs").onclick = () => send({ friend_bonus: $("#fb").value });
 }
 
+const ROLE = { seller: ["🧑‍💼 Продавец", "g"], pending: ["🆕 Заявка на продажу", "y"], sbanned: ["🧑‍💼 Продавец · блок", "r"], buyer: ["🛍 Покупатель", ""] };
+const agoTxt = s => s < 75 ? "сейчас онлайн" : s < 3600 ? Math.round(s / 60) + " мин назад" : s < 86400 ? Math.floor(s / 3600) + " ч назад" : "вчера";
+async function onlineSheet(mode) {
+  mode = mode || "now";
+  sheet('<div class="empty">Загрузка…</div>');
+  const j = await api("online_users", { mode }); if (!j.ok) return sheet(`<div class="empty">${esc(j.msg || "Нет данных")}</div>`);
+  sheet(`<div class="t" style="font-size:17px">🟢 Пользователи</div>
+    <div class="seg" style="margin-top:10px"><button data-om="now" class="${mode === "now" ? "on" : ""}">Онлайн · ${j.now}</button><button data-om="day" class="${mode === "day" ? "on" : ""}">За сутки · ${j.day}</button></div>
+    <div style="margin-top:12px">${j.users.length ? j.users.map(u => `<div class="card urow" data-u="${u.id}" style="cursor:pointer"><div class="row">${av(u.av, u.name)}<div class="grow"><div class="t">${esc(u.name)}${u.verified ? ' <span class="vb">✓</span>' : ""}</div>
+      <div class="mu">${u.username ? "@" + esc(u.username) + " · " : ""}ID ${u.id}</div><div class="mu">${u.online ? "🟢 " : ""}${agoTxt(u.ago)}${u.orders ? " · покупок " + u.orders : ""}</div></div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">${u.banned ? '<span class="pill r">заблокирован</span>' : `<span class="pill ${ROLE[u.role][1]}">${ROLE[u.role][0]}</span>`}${u.verify_req ? '<span class="pill y">✓?</span>' : ""}</div></div></div>`).join("") : '<div class="empty">Никого нет</div>'}</div>`);
+  document.querySelectorAll("[data-om]").forEach(b => b.onclick = () => { haptic(); onlineSheet(b.dataset.om); });
+  document.querySelectorAll("[data-u]").forEach(c => c.onclick = () => { haptic(); userSheet(j.users.find(x => x.id == c.dataset.u), mode); });
+}
+function userSheet(u, mode) {
+  const isSl = u.role !== "buyer";
+  sheet(`<div class="row">${av(u.av, u.name)}<div class="grow"><div class="t" style="font-size:17px">${esc(u.name)}${u.verified ? ' <span class="vb">✓ проверен</span>' : ""}</div><div class="mu">${u.username ? "@" + esc(u.username) + " · " : ""}ID ${u.id}</div></div><button id="ubk">‹</button></div>
+    <div class="kpi" style="margin-top:14px"><div><span class="mu">Статус</span><b style="font-size:15px">${u.banned ? "🚫 Заблокирован" : ROLE[u.role][0]}</b>${u.verify_req ? '<span class="mu">подал заявку на галочку</span>' : ""}</div>
+      <div><span class="mu">Покупки</span><b>${u.orders}</b><span class="mu">${u.spent} ⭐ всего</span></div><div><span class="mu">Активность</span><b style="font-size:15px">${u.online ? "🟢 онлайн" : agoTxt(u.ago)}</b></div></div>
+    <div class="lbl">Написать сообщение (придёт от бота магазина)</div><textarea id="umsg" rows="3" maxlength="1000" placeholder="Текст сообщения"></textarea>
+    <button class="f" id="usend" style="width:100%;margin-top:10px">✉️ Отправить</button>
+    ${isSl ? `<button class="f" id="uslr" style="width:100%;margin-top:8px">🧑‍💼 Профиль продавца</button>` : ""}
+    <button class="f ${u.banned ? "ok" : "no"}" id="uban" style="width:100%;margin-top:8px">${u.banned ? "✅ Разблокировать" : "🚫 Заблокировать"}</button>`);
+  $("#ubk").onclick = () => { haptic(); onlineSheet(mode); };
+  $("#usend").onclick = async () => { const t = $("#umsg").value.trim(); if (!t) return toast("Введи сообщение"); const r = await api("user_act", { id: u.id, act: "msg", text: t }); toast(r.msg || (r.ok ? "Отправлено" : "Ошибка")); if (r.ok) { haptic("medium"); $("#umsg").value = ""; } };
+  $("#uban").onclick = async () => { if (!u.banned && !confirm("Заблокировать " + u.name + "? Он потеряет доступ к магазину.")) return; const r = await api("user_act", { id: u.id, act: u.banned ? "unban" : "ban" }); toast(r.msg || "Ошибка"); if (r.ok) { haptic("medium"); u.banned = !u.banned; userSheet(u, mode); } };
+  if ($("#uslr")) $("#uslr").onclick = async () => { const r = await api("seller", { id: u.id }); if (r.ok && r.seller) openSeller(r.seller); else toast(r.msg || "Продавец не найден"); };
+}
+
 async function viewMore() {
   V(`<div class="empty">Загрузка…</div>`);
   const j = await api("overview"); if (tab !== "m") return; if (!j.ok) return V(`<div class="empty">${esc(j.msg || "Нет связи")}</div>`);
@@ -380,6 +412,7 @@ async function viewMore() {
   $("#pmb").onclick = async () => { const r = await api("pause", { which: "all", text: $("#pm").value }); if (r.ok) toast("Текст сохранён"); };
 }
 
+$("#onl").onclick = () => { haptic(); onlineSheet("now"); };
 const onl = j => { if (j && j.online && $("#onl")) $("#onl").innerHTML = "🟢 " + j.online.now + " онлайн<br><span style=\"font-weight:600;opacity:.8\">" + j.online.day + " за сутки</span>"; };
 setInterval(() => { if (!document.hidden) api("overview", { quiet: true }).then(j => { if (j.ok) { onl(j); counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge(); } }); }, 25000);
 setTab("q");
