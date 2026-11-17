@@ -20,7 +20,7 @@ import re
 import sqlite3
 import time
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape
 from urllib.parse import parse_qsl
 
@@ -1240,6 +1240,100 @@ async def api_user_act(d):
     return {"ok": True, "msg": "🚫 Заблокирован" if ban else "✅ Разблокирован"}
 
 
+UNLIM_DATE = "2099-12-31 23:59:59"
+VPN_FMT = "%Y-%m-%d %H:%M:%S"
+
+
+def _vpn_parse(v):
+    for f in (VPN_FMT, "%Y-%m-%d"):
+        try:
+            return datetime.strptime(v or "", f)
+        except ValueError:
+            continue
+    return None
+
+
+def vpn_get(uid: int) -> dict:
+    """Состояние VPN-подписки пользователя (читает базу VPN-бота)."""
+    if not vpn_ok():
+        return {"found": False}
+    with vdb() as c:
+        r = c.execute("SELECT name,expire_date,COALESCE(tier,'std') FROM users WHERE user_id=?", (uid,)).fetchone()
+    if not r:
+        return {"id": uid, "found": False, "active": False, "unlimited": False}
+    dt = _vpn_parse(r[1])
+    now = datetime.now()
+    return {"id": uid, "found": True, "name": r[0] or "", "expire": dt.strftime("%d.%m.%Y %H:%M") if dt else "", "active": bool(dt and dt > now),
+            "unlimited": bool(dt and dt.year >= 2090), "tier": r[2]}
+
+
+def vpn_set_expire(uid: int, new_dt: datetime, silent: bool = False):
+    with vdb() as c:
+        c.execute("INSERT OR IGNORE INTO users(user_id,name,balance) VALUES(?,?,0)", (uid, ""))
+        c.execute("UPDATE users SET expire_date=? WHERE user_id=?", (new_dt.strftime(VPN_FMT), uid))
+        if silent:   # без напоминаний «подписка заканчивается/закончилась»
+            ts = int(new_dt.timestamp())
+            for k in ("3d", "1d", "expired"):
+                c.execute("INSERT OR IGNORE INTO notified VALUES (?,?,?)", (uid, ts, k))
+        c.commit()
+
+
+def vpn_grant(uid: int, mode: str, days: int = 0) -> tuple[bool, str]:
+    if not vpn_ok():
+        return False, "База VPN не найдена"
+    if mode == "unlimited":
+        vpn_set_expire(uid, datetime.strptime(UNLIM_DATE, VPN_FMT), silent=True)
+        return True, "♾ Безлимитный доступ выдан"
+    if mode == "days":
+        if not 1 <= days <= 3650:
+            return False, "Дни: от 1 до 3650"
+        with vdb() as c:
+            r = c.execute("SELECT expire_date FROM users WHERE user_id=?", (uid,)).fetchone()
+        cur = _vpn_parse(r[0]) if r else None
+        base = cur if cur and cur > datetime.now() else datetime.now()
+        new = base + timedelta(days=days)
+        if new.year >= 2090:
+            new = datetime.strptime(UNLIM_DATE, VPN_FMT)
+        vpn_set_expire(uid, new, silent=False)
+        return True, f"✅ Добавлено {days} дн."
+    if mode == "revoke":
+        vpn_set_expire(uid, datetime.now() - timedelta(minutes=1), silent=True)
+        return True, "🚫 VPN-доступ отозван"
+    return False, "Некорректный запрос"
+
+
+@admin_route
+async def api_vpn_user(d):
+    try:
+        uid = int(d.get("id"))
+    except (TypeError, ValueError):
+        return {"ok": False, "msg": "Введи числовой ID"}
+    if not vpn_ok():
+        return {"ok": False, "msg": "База VPN не найдена"}
+    return {"ok": True, **vpn_get(uid)}
+
+
+@admin_route
+async def api_vpn_grant(d):
+    try:
+        uid = int(d.get("id"))
+        days = int(d.get("days") or 0)
+    except (TypeError, ValueError):
+        return {"ok": False, "msg": "Некорректные данные"}
+    ok, msg = vpn_grant(uid, str(d.get("mode", "")), days)
+    return {"ok": ok, "msg": msg, **(vpn_get(uid) if ok else {})}
+
+
+@admin_route
+async def api_vpn_unlimited(d):
+    """Список тех, у кого безлимит."""
+    if not vpn_ok():
+        return {"ok": False, "msg": "База VPN не найдена"}
+    with vdb() as c:
+        rows = c.execute("SELECT user_id,name FROM users WHERE expire_date>='2090' ORDER BY user_id LIMIT 100").fetchall()
+    return {"ok": True, "users": [{"id": r[0], "name": r[1] or ""} for r in rows]}
+
+
 PAY_KEYS = ("stars", "crypto", "wallet")
 
 
@@ -1295,7 +1389,7 @@ async def api_payments(d):
 def build_api() -> web.Application:
     app = web.Application(client_max_size=1024 * 1024)
     for name, fn in (("stats", api_stats), ("overview", api_overview), ("queue", api_queue), ("decide", api_decide), ("sellers", api_sellers), ("seller", api_seller),
-                     ("seller_act", api_seller_act), ("chats", api_chats), ("chat", api_chat), ("chat_send", api_chat_send), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause), ("payments", api_payments), ("online_users", api_online_users), ("user_act", api_user_act)):
+                     ("seller_act", api_seller_act), ("chats", api_chats), ("chat", api_chat), ("chat_send", api_chat_send), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause), ("payments", api_payments), ("online_users", api_online_users), ("user_act", api_user_act), ("vpn_user", api_vpn_user), ("vpn_grant", api_vpn_grant), ("vpn_unlimited", api_vpn_unlimited)):
         app.router.add_post(f"/api/{name}", fn)
     return app
 

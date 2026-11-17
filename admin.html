@@ -113,7 +113,7 @@ const tg = window.Telegram && Telegram.WebApp;
 if (tg) { tg.ready(); tg.expand(); try { tg.requestFullscreen && !tg.isFullscreen && /^(android|android_x|ios)$/.test(tg.platform || "") && tg.requestFullscreen(); } catch (e) {} try { tg.setHeaderColor("#0b0b1a"); tg.setBackgroundColor("#0b0b1a"); } catch (e) {} }
 const params = new URLSearchParams(location.search);
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
-const API = (params.get("api") || store("api") || "https://92-243-74-80.sslip.io:8443/shop").replace(/\/$/, "");
+const API = (params.get("api") || (store("api") && !String(store("api")).includes("92-243-74-80") ? store("api") : "") || "https://89-127-210-231.sslip.io:8443/shop").replace(/\/$/, "");
 if (params.get("api")) store("api", API);
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -385,11 +385,43 @@ function userSheet(u, mode) {
     <div class="lbl">Написать сообщение (придёт от бота магазина)</div><textarea id="umsg" rows="3" maxlength="1000" placeholder="Текст сообщения"></textarea>
     <button class="f" id="usend" style="width:100%;margin-top:10px">✉️ Отправить</button>
     ${isSl ? `<button class="f" id="uslr" style="width:100%;margin-top:8px">🧑‍💼 Профиль продавца</button>` : ""}
+    <button class="f" id="uvpn" style="width:100%;margin-top:8px">🛡 VPN-доступ</button>
     <button class="f ${u.banned ? "ok" : "no"}" id="uban" style="width:100%;margin-top:8px">${u.banned ? "✅ Разблокировать" : "🚫 Заблокировать"}</button>`);
   $("#ubk").onclick = () => { haptic(); onlineSheet(mode); };
   $("#usend").onclick = async () => { const t = $("#umsg").value.trim(); if (!t) return toast("Введи сообщение"); const r = await api("user_act", { id: u.id, act: "msg", text: t }); toast(r.msg || (r.ok ? "Отправлено" : "Ошибка")); if (r.ok) { haptic("medium"); $("#umsg").value = ""; } };
   $("#uban").onclick = async () => { if (!u.banned && !confirm("Заблокировать " + u.name + "? Он потеряет доступ к магазину.")) return; const r = await api("user_act", { id: u.id, act: u.banned ? "unban" : "ban" }); toast(r.msg || "Ошибка"); if (r.ok) { haptic("medium"); u.banned = !u.banned; userSheet(u, mode); } };
+  $("#uvpn").onclick = () => { haptic(); vpnSheet(u.id); };
   if ($("#uslr")) $("#uslr").onclick = async () => { const r = await api("seller", { id: u.id }); if (r.ok && r.seller) openSeller(r.seller); else toast(r.msg || "Продавец не найден"); };
+}
+
+async function vpnSheet(id) {
+  const me = tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : "";
+  const lst = await api("vpn_unlimited", {});
+  sheet(`<div class="t" style="font-size:17px">🛡 VPN-доступ</div><div class="mu" style="margin:4px 0 10px">Выдать безлимит или дни себе и другим, либо забрать доступ. Ключи обновятся в течение минуты.</div>
+    <div class="lbl" style="margin-top:0">Telegram ID пользователя</div>
+    <div class="row"><input id="vid" type="number" inputmode="numeric" placeholder="ID" value="${id || ""}"><button class="f" id="vme" style="flex:none">Себе</button></div>
+    <button class="f" id="vchk" style="width:100%;margin-top:8px">Проверить</button><div id="vst" style="margin-top:12px"></div>
+    <div class="sec">Безлимит сейчас${lst.ok ? " · " + lst.users.length : ""}</div>
+    ${lst.ok && lst.users.length ? lst.users.map(u => `<div class="card" data-vu="${u.id}" style="cursor:pointer"><div class="t" style="font-size:14px">${esc(u.name || "Без имени")}</div><div class="mu">ID ${u.id} · ♾ безлимит</div></div>`).join("") : '<div class="empty">Пока никому не выдан</div>'}`);
+  const show = (r) => {
+    const b = $("#vst"); if (!b) return;
+    if (!r.ok) { b.innerHTML = `<div class="empty">${esc(r.msg || "Ошибка")}</div>`; return; }
+    const id2 = r.id;
+    b.innerHTML = `<div class="card"><div class="t" style="font-size:15px">${r.found ? esc(r.name || "ID " + id2) : "Пользователь не заходил в VPN-бота"}</div>
+      <div class="mu">${r.unlimited ? "♾ Безлимитный доступ" : r.active ? "✅ Активна до " + esc(r.expire) : r.found && r.expire ? "⛔ Закончилась " + esc(r.expire) : "Подписки нет"}</div></div>
+      <button class="f ok" id="vun" style="width:100%;margin-top:8px">♾ Выдать безлимит</button>
+      <div class="row" style="margin-top:8px"><input id="vdays" type="number" inputmode="numeric" min="1" max="3650" placeholder="Дней" value="30"><button class="f" id="vadd" style="flex:none">➕ Добавить дни</button></div>
+      <button class="f no" id="vrev" style="width:100%;margin-top:8px">🚫 Забрать доступ</button>`;
+    const act = async (mode, days) => { const g = await api("vpn_grant", { id: id2, mode, days }); toast(g.msg || (g.ok ? "Готово" : "Ошибка")); if (g.ok) { haptic("medium"); show(g); } };
+    $("#vun").onclick = () => act("unlimited");
+    $("#vadd").onclick = () => act("days", +$("#vdays").value || 0);
+    $("#vrev").onclick = () => { if (confirm("Забрать VPN-доступ у " + id2 + "?")) act("revoke"); };
+  };
+  const check = async () => { const v = $("#vid").value.trim(); if (!v) return toast("Введи ID"); show(await api("vpn_user", { id: v })); };
+  $("#vchk").onclick = check;
+  $("#vme").onclick = () => { $("#vid").value = me; check(); };
+  document.querySelectorAll("[data-vu]").forEach(c => c.onclick = () => { $("#vid").value = c.dataset.vu; check(); });
+  if (id) check();
 }
 
 async function viewMore() {
@@ -398,13 +430,14 @@ async function viewMore() {
   counts.total = j.counts.total || 0; counts.chat = j.chat_unread || 0; badge();
   const s = j.stats.shop, v = j.stats.vpn, p = j.pause;
   const sw = (k, ic, n, st) => st === null ? "" : `<div class="card ctl ${st ? "off" : ""}"><div class="row"><span class="ico">${ic}</span><div class="grow"><div class="t" style="font-size:17px">${n}</div><div class="mu">${st ? "Продажи приостановлены" : "Продажи идут"}</div></div></div><div data-sw="${k}">${tg2(st, "▶ Работает", "⏸ Стоп")}</div></div>`;
-  V(`<button class="f" style="width:100%;margin-bottom:12px" id="stbtn">📊 Статистика</button><button class="f" style="width:100%;margin-bottom:12px" id="paybtn">💳 Способы оплаты</button><div class="sec">Продажи</div>${sw("shop", "🛍", "Azika Shop", p.shop)}${sw("vpn", "🔐", "Azika VPN", p.vpn)}
+  V(`<button class="f" style="width:100%;margin-bottom:12px" id="stbtn">📊 Статистика</button><button class="f" style="width:100%;margin-bottom:12px" id="paybtn">💳 Способы оплаты</button><button class="f" style="width:100%;margin-bottom:12px" id="vpnbtn">🛡 VPN-доступ</button><div class="sec">Продажи</div>${sw("shop", "🛍", "Azika Shop", p.shop)}${sw("vpn", "🔐", "Azika VPN", p.vpn)}
   <div class="card"><div class="lbl" style="margin-top:0">Сообщение покупателям на время паузы</div><textarea id="pm" rows="2" maxlength="200">${esc(p.msg)}</textarea><button class="f" style="width:100%;margin-top:10px" id="pmb">Сохранить текст</button></div>
   <div class="btns" style="margin-top:0;margin-bottom:12px"><button class="no f" data-sa="1">⏸ Остановить всё</button><button class="ok f" data-sa="0">▶ Запустить всё</button></div>
   ${s ? `<div class="sec">Шоп</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${s.users}</b></div><div><span class="mu">Сегодня</span><b>${s.today}</b><span class="mu">${s.today_stars}⭐</span></div><div><span class="mu">Всего оплат</span><b>${s.paid}</b><span class="mu">${s.paid_stars}⭐</span></div><div><span class="mu">Ждут выдачи</span><b>${s.wait}</b></div><div><span class="mu">Споры</span><b>${s.disputes}</b></div><div><span class="mu">Продавцов</span><b>${s.sellers}</b><span class="mu">блок ${s.sellers_banned}</span></div></div>` : ""}
   ${v ? `<div class="sec">VPN</div><div class="card kpi"><div><span class="mu">Пользователи</span><b>${v.users}</b></div><div><span class="mu">Активных</span><b>${v.active}</b></div><div><span class="mu">Оплат</span><b>${v.payments}</b></div><div><span class="mu">Сегодня</span><b>${v.payments_today}</b></div></div>` : ""}`);
   $("#stbtn").onclick = () => { haptic(); statsSheet(); };
   $("#paybtn").onclick = () => { haptic(); paySheet(); };
+  $("#vpnbtn").onclick = () => { haptic(); vpnSheet(); };
   document.querySelectorAll("[data-sw]").forEach(d => d.onclick = async () => {
     const t = d.firstChild, on = flip(t, d.closest(".card")), r = await api("pause", { which: d.dataset.sw, on }); if (r.ok) { toast(on ? "Продажи остановлены" : "Продажи запущены"); setTimeout(viewMore, 380); } else viewMore();
   });
