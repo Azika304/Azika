@@ -397,24 +397,34 @@ function userSheet(u, mode) {
 async function vpnSheet(id) {
   const me = tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : "";
   const lst = await api("vpn_unlimited", {});
-  sheet(`<div class="t" style="font-size:17px">🛡 VPN-доступ</div><div class="mu" style="margin:4px 0 10px">Выдать безлимит или дни себе и другим, либо забрать доступ. Ключи обновятся в течение минуты.</div>
-    <div class="lbl" style="margin-top:0">Telegram ID пользователя</div>
-    <div class="row"><input id="vid" type="number" inputmode="numeric" placeholder="ID" value="${id || ""}"><button class="f" id="vme" style="flex:none">Себе</button></div>
-    <button class="f" id="vchk" style="width:100%;margin-top:8px">Проверить</button><div id="vst" style="margin-top:12px"></div>
-    <div class="sec">🔑 Генератор ключей (3x-ui)</div>
-    <div class="card">
-      <div class="mu" style="margin-bottom:8px">Создать любое количество готовых VLESS-ключей в панели 3x-ui (0 дней = безлимит):</div>
-      <div class="row">
-        <div style="flex:1"><div class="lbl" style="margin-top:0">Кол-во ключей</div><input id="vg_cnt" type="number" inputmode="numeric" min="1" max="500" value="1"></div>
-        <div style="flex:1"><div class="lbl" style="margin-top:0">Срок (дней)</div><input id="vg_days" type="number" inputmode="numeric" min="0" max="3650" value="30"></div>
-      </div>
-      <div class="lbl">Метка / имя (необязательно)</div>
-      <input id="vg_pref" type="text" placeholder="например: promo или vip" value="admin">
-      <button class="f ok" id="vg_btn" style="width:100%;margin-top:10px">⚡ Создать VPN-ключи</button>
-      <div id="vg_res" style="margin-top:10px"></div>
+  sheet(`<div class="t" style="font-size:17px">🛡 Управление VPN</div>
+    <div class="mu" style="margin:4px 0 12px">Выпуск ключей VLESS (3x-ui) и управление подписками пользователей.</div>
+    <div class="row" style="margin-bottom:10px">
+      <button class="f ok" id="tab_gen" style="flex:1">Выпуск ключей</button>
+      <button class="f" id="tab_usr" style="flex:1">По ID пользователя</button>
     </div>
-    <div class="sec">Безлимит сейчас${lst.ok ? " · " + lst.users.length : ""}</div>
-    ${lst.ok && lst.users.length ? lst.users.map(u => `<div class="card" data-vu="${u.id}" style="cursor:pointer"><div class="t" style="font-size:14px">${esc(u.name || "Без имени")}</div><div class="mu">ID ${u.id} · ♾ безлимит</div></div>`).join("") : '<div class="empty">Пока никому не выдан</div>'}`);
+    <div id="pane_gen">
+      <div class="card">
+        <div class="row">
+          <div style="flex:1"><div class="lbl" style="margin-top:0">Количество</div><input id="vg_cnt" type="number" inputmode="numeric" min="1" max="500" value="1"></div>
+          <div style="flex:1"><div class="lbl" style="margin-top:0">Срок (дней, 0 = ∞)</div><input id="vg_days" type="number" inputmode="numeric" min="0" max="3650" value="30"></div>
+        </div>
+        <div class="lbl">Примечание (префикс)</div>
+        <input id="vg_pref" type="text" placeholder="admin" value="admin">
+        <button class="f ok" id="vg_btn" style="width:100%;margin-top:10px">Сгенерировать ключи</button>
+        <div id="vg_res" style="margin-top:10px"></div>
+      </div>
+    </div>
+    <div id="pane_usr" style="display:none">
+      <div class="card">
+        <div class="lbl" style="margin-top:0">Telegram ID</div>
+        <div class="row"><input id="vid" type="number" inputmode="numeric" placeholder="Введите ID" value="${id || ""}"><button class="f" id="vme" style="flex:none">Мой ID</button></div>
+        <button class="f" id="vchk" style="width:100%;margin-top:8px">Найти пользователя</button>
+        <div id="vst" style="margin-top:12px"></div>
+      </div>
+      <div class="sec">Активный безлимит${lst.ok ? " · " + lst.users.length : ""}</div>
+      ${lst.ok && lst.users.length ? lst.users.map(u => `<div class="card" data-vu="${u.id}" style="cursor:pointer"><div class="t" style="font-size:14px">${esc(u.name || "Без имени")}</div><div class="mu">ID ${u.id} · Безлимит</div></div>`).join("") : '<div class="empty">Список пуст</div>'}
+    </div>`);
   const show = (r) => {
     const b = $("#vst"); if (!b) return;
     if (!r.ok) { b.innerHTML = `<div class="empty">${esc(r.msg || "Ошибка")}</div>`; return; }
@@ -430,23 +440,26 @@ async function vpnSheet(id) {
     $("#vrev").onclick = () => { if (confirm("Забрать VPN-доступ у " + id2 + "?")) act("revoke"); };
   };
   const check = async () => { const v = $("#vid").value.trim(); if (!v) return toast("Введи ID"); show(await api("vpn_user", { id: v })); };
+  $("#tab_gen").onclick = () => { $("#pane_gen").style.display = ""; $("#pane_usr").style.display = "none"; $("#tab_gen").className = "f ok"; $("#tab_usr").className = "f"; };
+  $("#tab_usr").onclick = () => { $("#pane_gen").style.display = "none"; $("#pane_usr").style.display = ""; $("#tab_usr").className = "f ok"; $("#tab_gen").className = "f"; };
+  if (id) $("#tab_usr").click();
   $("#vg_btn").onclick = async () => {
     const cnt = +$("#vg_cnt").value || 1;
     const days = $("#vg_days").value === "" ? 30 : +$("#vg_days").value;
     const prefix = $("#vg_pref").value.trim() || "admin";
     const box = $("#vg_res");
-    box.innerHTML = '<div class="mu">⏳ Создаю ключи в 3x-ui...</div>';
+    box.innerHTML = '<div class="mu">Выполняется запрос к панели 3x-ui...</div>';
     const r = await api("vpn_gen", { count: cnt, days, prefix });
-    toast(r.msg || (r.ok ? "Готово" : "Ошибка"));
+    toast(r.msg || (r.ok ? "Выполнено" : "Ошибка"));
     if (!r.ok) { box.innerHTML = `<div class="empty">${esc(r.msg || "Ошибка")}</div>`; return; }
     haptic("medium");
     const txt = (r.links || []).join("\n");
-    box.innerHTML = `<div class="lbl" style="margin-top:4px">Готовые ключи (${r.links.length} шт.):</div>
+    box.innerHTML = `<div class="lbl" style="margin-top:4px">Выпущенные ключи (${r.links.length} шт.):</div>
       <textarea id="vg_out" readonly rows="${Math.min(8, Math.max(3, r.links.length + 1))}" style="width:100%;font-size:11px;font-family:monospace;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:10px;padding:8px;box-sizing:border-box">${esc(txt)}</textarea>
-      <button class="f" id="vg_copy" style="width:100%;margin-top:6px">📋 Скопировать все ключи</button>`;
+      <button class="f" id="vg_copy" style="width:100%;margin-top:6px">Скопировать список</button>`;
     $("#vg_copy").onclick = async () => {
-      try { await navigator.clipboard.writeText(txt); toast("Скопировано в буфер!"); haptic("light"); }
-      catch { const el = $("#vg_out"); el.select(); document.execCommand("copy"); toast("Скопировано!"); }
+      try { await navigator.clipboard.writeText(txt); toast("Скопировано в буфер обмена"); haptic("light"); }
+      catch { const el = $("#vg_out"); el.select(); document.execCommand("copy"); toast("Скопировано"); }
     };
   };
   $("#vchk").onclick = check;

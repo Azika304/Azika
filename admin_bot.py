@@ -1399,8 +1399,8 @@ except Exception as _xe:
 
 async def _xui_gen_keys(count: int, days: int, prefix: str = "admin", uid: int | None = None) -> list[str]:
     if not _xui or not getattr(_xui, "PANELS", None):
-        raise RuntimeError("Панель 3x-ui не подключена (проверь /etc/azika.env)")
-    panel = _xui.PANELS[0][0]
+        raise RuntimeError("Панель 3x-ui не подключена (проверьте /etc/azika.env)")
+    panel = _xui.PANELS[0]
     expiry_ms = 0 if days <= 0 else int((time.time() + days * 86400) * 1000)
     links = []
     for i in range(1, count + 1):
@@ -1416,17 +1416,17 @@ async def api_vpn_gen(d):
         count = int(d.get("count") or 1)
         days = int(d.get("days") if d.get("days") is not None else 30)
     except (TypeError, ValueError):
-        return {"ok": False, "msg": "Укажи числа для количества и дней"}
+        return {"ok": False, "msg": "Укажите числовые значения для количества и срока"}
     if not 1 <= count <= 500:
-        return {"ok": False, "msg": "Количество ключей: от 1 до 500 за раз"}
+        return {"ok": False, "msg": "Допустимое количество ключей: от 1 до 500"}
     if not 0 <= days <= 3650:
-        return {"ok": False, "msg": "Срок: от 1 до 3650 дней (0 = безлимит)"}
+        return {"ok": False, "msg": "Допустимый срок: от 1 до 3650 дней (0 — безлимит)"}
     prefix = re.sub(r"[^a-zA-Z0-9_-]", "", str(d.get("prefix") or "admin"))[:20] or "admin"
     try:
         links = await _xui_gen_keys(count=count, days=days, prefix=prefix)
     except Exception as e:
         return {"ok": False, "msg": f"Ошибка 3x-ui: {e}"}
-    return {"ok": True, "msg": f"Создано ключей: {len(links)}", "links": links}
+    return {"ok": True, "msg": f"Сгенерировано ключей: {len(links)}", "links": links}
 
 
 def build_api() -> web.Application:
