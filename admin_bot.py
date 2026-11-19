@@ -1386,10 +1386,53 @@ async def api_payments(d):
     return {"ok": True, "msg": "Сохранено", **pay_info()}
 
 
+
+import sys as _sys
+import secrets as _secrets
+if "/opt/azika" not in _sys.path:
+    _sys.path.insert(0, "/opt/azika")
+try:
+    import xui as _xui
+except Exception as _xe:
+    _xui = None
+    logging.warning("Модуль xui не загружен: %s", _xe)
+
+async def _xui_gen_keys(count: int, days: int, prefix: str = "admin", uid: int | None = None) -> list[str]:
+    if not _xui or not getattr(_xui, "PANELS", None):
+        raise RuntimeError("Панель 3x-ui не подключена (проверь /etc/azika.env)")
+    panel = _xui.PANELS[0]
+    expiry_ms = 0 if days <= 0 else int((time.time() + days * 86400) * 1000)
+    links = []
+    for i in range(1, count + 1):
+        tag = f"{uid}" if (uid and count == 1) else f"{prefix}_{int(time.time())}_{_secrets.token_hex(2)}_{i}"
+        label = f"Azika VPN ({days}д)" if days > 0 else "Azika VPN (Безлимит)"
+        _, link = await panel.upsert_client(email=tag, expiry_ms=expiry_ms, limit_ip=1, name=label)
+        links.append(link)
+    return links
+
+@admin_route
+async def api_vpn_gen(d):
+    try:
+        count = int(d.get("count") or 1)
+        days = int(d.get("days") if d.get("days") is not None else 30)
+    except (TypeError, ValueError):
+        return {"ok": False, "msg": "Укажи числа для количества и дней"}
+    if not 1 <= count <= 500:
+        return {"ok": False, "msg": "Количество ключей: от 1 до 500 за раз"}
+    if not 0 <= days <= 3650:
+        return {"ok": False, "msg": "Срок: от 1 до 3650 дней (0 = безлимит)"}
+    prefix = re.sub(r"[^a-zA-Z0-9_-]", "", str(d.get("prefix") or "admin"))[:20] or "admin"
+    try:
+        links = await _xui_gen_keys(count=count, days=days, prefix=prefix)
+    except Exception as e:
+        return {"ok": False, "msg": f"Ошибка 3x-ui: {e}"}
+    return {"ok": True, "msg": f"Создано ключей: {len(links)}", "links": links}
+
+
 def build_api() -> web.Application:
     app = web.Application(client_max_size=1024 * 1024)
     for name, fn in (("stats", api_stats), ("overview", api_overview), ("queue", api_queue), ("decide", api_decide), ("sellers", api_sellers), ("seller", api_seller),
-                     ("seller_act", api_seller_act), ("chats", api_chats), ("chat", api_chat), ("chat_send", api_chat_send), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause), ("payments", api_payments), ("online_users", api_online_users), ("user_act", api_user_act), ("vpn_user", api_vpn_user), ("vpn_grant", api_vpn_grant), ("vpn_unlimited", api_vpn_unlimited)):
+                     ("seller_act", api_seller_act), ("chats", api_chats), ("chat", api_chat), ("chat_send", api_chat_send), ("promos", api_promos), ("promo_new", api_promo_new), ("promo_act", api_promo_act), ("pause", api_pause), ("payments", api_payments), ("online_users", api_online_users), ("user_act", api_user_act), ("vpn_user", api_vpn_user), ("vpn_grant", api_vpn_grant), ("vpn_unlimited", api_vpn_unlimited), ("vpn_gen", api_vpn_gen)):
         app.router.add_post(f"/api/{name}", fn)
     return app
 
