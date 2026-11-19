@@ -1304,12 +1304,18 @@ def vpn_grant(uid: int, mode: str, days: int = 0) -> tuple[bool, str]:
 
 @admin_route
 async def api_vpn_user(d):
-    try:
-        uid = int(d.get("id"))
-    except (TypeError, ValueError):
-        return {"ok": False, "msg": "Введи числовой ID"}
-    if not vpn_ok():
-        return {"ok": False, "msg": "База VPN не найдена"}
+    if not vpn_ok(): return {"ok": False, "msg": "База VPN не найдена"}
+    raw = str(d.get("id") or "").strip()
+    if not raw: return {"ok": False, "msg": "Введите ID или @username"}
+    if raw.lstrip("-").isdigit(): uid = int(raw)
+    else:
+        un = raw.lstrip("@").lower()
+        with vdb() as c:
+            cols = [r[1] for r in c.execute("PRAGMA table_info(users)").fetchall()]
+            q = "SELECT user_id FROM users WHERE LOWER(username)=? OR LOWER(name) LIKE ?" if "username" in cols else "SELECT user_id FROM users WHERE LOWER(name)=? OR LOWER(name) LIKE ?"
+            row = c.execute(q, (un, f"%@{un}%")).fetchone()
+        if not row: return {"ok": False, "msg": f"@{un} не найден в базе VPN"}
+        uid = int(next(iter(row)))
     return {"ok": True, **vpn_get(uid)}
 
 
@@ -1320,7 +1326,25 @@ async def api_vpn_grant(d):
         days = int(d.get("days") or 0)
     except (TypeError, ValueError):
         return {"ok": False, "msg": "Некорректные данные"}
-    ok, msg = vpn_grant(uid, str(d.get("mode", "")), days)
+    mode = str(d.get("mode", ""))
+    ok, msg = vpn_grant(uid, mode, days)
+    if ok:
+        info = vpn_get(uid)
+        try:
+            if mode == "unlimited":
+                await _sync_user_xui(uid, datetime.strptime(UNLIM_DATE, VPN_FMT), unlim=True)
+                await _notify_vpn(uid, "🛡 <b>Администратор выдал вам безлимитную подписку Azika VPN!</b>\n\nОткройте бот и нажмите /start — ваш ключ уже активен.")
+            elif mode == "days":
+                exp_dt = _vpn_parse(info.get("expire", "").replace(".", "-")) or (datetime.now() + timedelta(days=days))
+                with vdb() as c:
+                    r = c.execute("SELECT expire_date FROM users WHERE user_id=?", (uid,)).fetchone()
+                    if r: exp_dt = _vpn_parse(next(iter(r))) or exp_dt
+                await _sync_user_xui(uid, exp_dt, unlim=(exp_dt.year >= 2090))
+                await _notify_vpn(uid, f"🛡 <b>Администратор выдал вам подписку Azika VPN на {days} дн.!</b>\n\nДействует до: <b>{info.get('expire', '')}</b>\nОткройте бот — ваш ключ уже активен.")
+            elif mode == "revoke":
+                await _notify_vpn(uid, "🚫 <b>Ваш доступ к Azika VPN был отозван администратором.</b>")
+        except Exception as e:
+            logging.warning("Sync/notify error for %s: %s", uid, e)
     return {"ok": ok, "msg": msg, **(vpn_get(uid) if ok else {})}
 
 
@@ -1387,75 +1411,80 @@ async def api_payments(d):
 
 
 
-import sys as _sys
-import secrets as _secrets
-if "/opt/azika" not in _sys.path:
-    _sys.path.insert(0, "/opt/azika")
-try:
-    import xui as _xui
-except Exception as _xe:
-    _xui = None
-    logging.warning("Модуль xui не загружен: %s", _xe)
+import sys as _sys, secrets as _sec
+if "/opt/azika" not in _sys.path: _sys.path.insert(0, "/opt/azika")
+try: import xui as _xui
+except Exception: _xui = None
 
-async def _xui_gen_subs(count: int, days: int, prefix: str = "admin") -> list[str]:
-    if not _xui or not getattr(_xui, "PANELS", None):
-        raise RuntimeError("Панель 3x-ui не подключена")
-    if not vpn_ok():
-        raise RuntimeError("База VPN не найдена")
-    panel = _xui.PANELS
-    host = os.getenv("SERVER_HOST", "89.127.210.231").replace(".", "-")
-    base_url = os.getenv("API_URL", f"https://{host}.sslip.io:8443").rstrip("/")
+def _env_val(path, key):
+    try:
+        for l in open(path, encoding="utf-8"):
+            l = l.strip()
+            if l.startswith(key + "="):
+                _, val = l.split("=", 1)
+                return val.strip().strip('"').strip("'")
+    except Exception: pass
+    return ""
+
+async def _notify_vpn(uid, txt):
+    tok = _env_val("/etc/azika.env", "BOT_TOKEN")
+    if not tok or uid <= 0: return
+    try:
+        b = Bot(token=tok, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+        try:
+            await b.send_message(uid, txt)
+        finally:
+            await b.session.close()
+    except Exception as e:
+        logging.warning("VPN notify error (%s): %s", uid, e)
+
+async def _sync_user_xui(uid, exp_dt, unlim=False):
+    if not _xui or not getattr(_xui, "PANELS", None) or not vpn_ok(): return
+    panel = next(iter(_xui.PANELS))
+    exp_ms = 0 if unlim else int(exp_dt.timestamp() * 1000)
+    lbl = "Azika VPN (Безлимит)" if unlim else f"Azika VPN (до {exp_dt.strftime('%d.%m.%Y')})"
+    uid_s, lnk = await panel.ensure_client(email=str(uid), expiry_ms=exp_ms, limit_ip=1, host=panel.host, name=lbl)
+    with vdb() as cn:
+        cn.execute("CREATE TABLE IF NOT EXISTS xui_keys2 (user_id INTEGER, srv TEXT, idx INTEGER, uuid TEXT, expiry_ms INTEGER, limit_ip INTEGER, link TEXT, PRIMARY KEY (user_id, srv, idx))")
+        cn.execute("CREATE TABLE IF NOT EXISTS sub_tokens (user_id INTEGER PRIMARY KEY, token TEXT UNIQUE)")
+        cn.execute("INSERT OR REPLACE INTO xui_keys2 VALUES(?,?,1,?,?,1,?)", (uid, panel.sid, uid_s, exp_ms, lnk))
+        cn.execute("INSERT OR IGNORE INTO sub_tokens(user_id, token) VALUES(?,?)", (uid, _sec.token_urlsafe(16)))
+        cn.commit()
+
+async def _gen_subs(cnt, days, pref="admin"):
+    if not _xui or not getattr(_xui, "PANELS", None): raise RuntimeError("3x-ui не подключена")
+    panel = next(iter(_xui.PANELS))
+    host = _env_val("/etc/azika.env", "SERVER_HOST").replace(".", "-") or "89-127-210-231"
+    base = (_env_val("/etc/azika.env", "API_URL") or f"https://{host}.sslip.io:8443").rstrip("/")
     exp_dt = datetime.strptime(UNLIM_DATE, VPN_FMT) if days <= 0 else (datetime.now() + timedelta(days=days))
-    exp_str = exp_dt.strftime(VPN_FMT)
-    expiry_ms = 0 if days <= 0 else int(exp_dt.timestamp() * 1000)
-    label = f"Azika VPN ({days}д)" if days > 0 else "Azika VPN (Безлимит)"
-
-    sub_links = []
-    with vdb() as conn:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS xui_keys2 (user_id INTEGER, srv TEXT, idx INTEGER, uuid TEXT, "
-            "expiry_ms INTEGER, limit_ip INTEGER, link TEXT, PRIMARY KEY (user_id, srv, idx))"
-        )
-        conn.execute("CREATE TABLE IF NOT EXISTS sub_tokens (user_id INTEGER PRIMARY KEY, token TEXT UNIQUE)")
-        row = conn.execute("SELECT MIN(user_id) FROM users").fetchone()
-        next_vid = min(-100000, (row or 0) - 1)
-
-        for i in range(1, count + 1):
-            vid = next_vid - i + 1
-            tag = f"{prefix}_{abs(vid)}_{_secrets.token_hex(2)}"
-            uid_str, vless_link = await panel.ensure_client(
-                email=tag, expiry_ms=expiry_ms, limit_ip=1, host=panel.host, name=label
-            )
-            sub_token = _secrets.token_urlsafe(16)
-            conn.execute(
-                "INSERT OR REPLACE INTO users(user_id, name, balance, expire_date, tier, slots, people) VALUES(?,?,0,?,'std',1,1)",
-                (vid, f"{prefix} #{i}", exp_str),
-            )
-            conn.execute(
-                "INSERT OR REPLACE INTO xui_keys2(user_id, srv, idx, uuid, expiry_ms, limit_ip, link) VALUES(?,?,1,?,?,1,?)",
-                (vid, panel.sid, uid_str, expiry_ms, vless_link),
-            )
-            conn.execute("INSERT OR REPLACE INTO sub_tokens(user_id, token) VALUES(?,?)", (vid, sub_token))
-            sub_links.append(f"{base_url}/sub/{sub_token}")
-        conn.commit()
-    return sub_links
+    exp_ms = 0 if days <= 0 else int(exp_dt.timestamp() * 1000)
+    lbl = f"Azika VPN ({days}д)" if days > 0 else "Azika VPN (Безлимит)"
+    out = []
+    with vdb() as cn:
+        cn.execute("CREATE TABLE IF NOT EXISTS xui_keys2 (user_id INTEGER, srv TEXT, idx INTEGER, uuid TEXT, expiry_ms INTEGER, limit_ip INTEGER, link TEXT, PRIMARY KEY (user_id, srv, idx))")
+        cn.execute("CREATE TABLE IF NOT EXISTS sub_tokens (user_id INTEGER PRIMARY KEY, token TEXT UNIQUE)")
+        row = cn.execute("SELECT MIN(user_id) FROM users").fetchone()
+        min_val = next(iter(row)) if row else None
+        nid = min(-100000, int(min_val or 0) - 1)
+        for i in range(1, cnt + 1):
+            vid = nid - i + 1
+            uid_s, lnk = await panel.ensure_client(email=f"{pref}_{abs(vid)}_{_sec.token_hex(2)}", expiry_ms=exp_ms, limit_ip=1, host=panel.host, name=lbl)
+            tok = _sec.token_urlsafe(16)
+            cn.execute("INSERT OR REPLACE INTO users(user_id,name,balance,expire_date,tier,slots,people) VALUES(?,?,0,?,'std',1,1)", (vid, f"{pref} #{i}", exp_dt.strftime(VPN_FMT)))
+            cn.execute("INSERT OR REPLACE INTO xui_keys2 VALUES(?,?,1,?,?,1,?)", (vid, panel.sid, uid_s, exp_ms, lnk))
+            cn.execute("INSERT OR REPLACE INTO sub_tokens VALUES(?,?)", (vid, tok))
+            out.append(f"{base}/sub/{tok}")
+        cn.commit()
+    return out
 
 @admin_route
 async def api_vpn_gen(d):
-    try:
-        count = int(d.get("count") or 1)
-        days = int(d.get("days") if d.get("days") is not None else 30)
-    except (TypeError, ValueError):
-        return {"ok": False, "msg": "Укажите числа для количества и срока"}
-    if not 1 <= count <= 500:
-        return {"ok": False, "msg": "Допустимое количество: от 1 до 500"}
-    if not 0 <= days <= 3650:
-        return {"ok": False, "msg": "Допустимый срок: от 1 до 3650 дней (0 — безлимит)"}
-    prefix = re.sub(r"[^a-zA-Z0-9_-]", "", str(d.get("prefix") or "admin"))[:20] or "admin"
-    try:
-        links = await _xui_gen_subs(count=count, days=days, prefix=prefix)
-    except Exception as e:
-        return {"ok": False, "msg": f"Ошибка: {e}"}
+    try: cnt, days = int(d.get("count") or 1), int(d.get("days") if d.get("days") is not None else 30)
+    except Exception: return {"ok": False, "msg": "Укажите числа"}
+    if not (1 <= cnt <= 500 and 0 <= days <= 3650): return {"ok": False, "msg": "Кол-во 1-500, дни 0-3650"}
+    pref = re.sub(r"[^a-zA-Z0-9_-]", "", str(d.get("prefix") or "admin"))[:20] or "admin"
+    try: links = await _gen_subs(cnt, days, pref)
+    except Exception as e: return {"ok": False, "msg": str(e)}
     return {"ok": True, "msg": f"Выпущено подписок: {len(links)}", "links": links}
 
 

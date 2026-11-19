@@ -398,33 +398,27 @@ async function vpnSheet(id) {
   const me = tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : "";
   const lst = await api("vpn_unlimited", {});
   sheet(`<div class="t" style="font-size:17px">🛡 Управление VPN</div>
-    <div class="mu" style="margin:4px 0 12px">Выпуск подписок Azika VPN и управление доступом пользователей.</div>
-    <div class="row" style="margin-bottom:10px">
-      <button class="f ok" id="tab_gen" style="flex:1">Выпуск подписок</button>
-      <button class="f" id="tab_usr" style="flex:1">По ID пользователя</button>
+    <div class="mu" style="margin:4px 0 12px">Выпуск подписок Azika VPN и управление доступом.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <button class="f ok" id="tab_gen" style="width:100%;height:40px;white-space:nowrap;padding:0 6px;font-size:13px">Выпуск подписок</button>
+      <button class="f" id="tab_usr" style="width:100%;height:40px;white-space:nowrap;padding:0 6px;font-size:13px">По ID / @username</button>
     </div>
-    <div id="pane_gen">
-      <div class="card">
-        <div class="row">
-          <div style="flex:1"><div class="lbl" style="margin-top:0">Количество</div><input id="vg_cnt" type="number" inputmode="numeric" min="1" max="500" value="1"></div>
-          <div style="flex:1"><div class="lbl" style="margin-top:0">Срок (дней, 0 = ∞)</div><input id="vg_days" type="number" inputmode="numeric" min="0" max="3650" value="30"></div>
-        </div>
-        <div class="lbl">Примечание (префикс)</div>
-        <input id="vg_pref" type="text" placeholder="admin" value="admin">
-        <button class="f ok" id="vg_btn" style="width:100%;margin-top:10px">Создать подписки Azika VPN</button>
-        <div id="vg_res" style="margin-top:10px"></div>
+    <div id="pane_gen"><div class="card">
+      <div class="row">
+        <div style="flex:1"><div class="lbl" style="margin-top:0">Количество</div><input id="vg_cnt" type="number" min="1" max="500" value="1"></div>
+        <div style="flex:1"><div class="lbl" style="margin-top:0">Срок (0 = ∞)</div><input id="vg_days" type="number" min="0" max="3650" value="30"></div>
       </div>
+      <div class="lbl">Примечание (префикс)</div><input id="vg_pref" type="text" value="admin">
+      <button class="f ok" id="vg_btn" style="width:100%;margin-top:10px">Создать подписки Azika VPN</button>
+      <div id="vg_res" style="margin-top:10px"></div>
+    </div></div>
+    <div id="pane_usr" style="display:none"><div class="card">
+      <div class="lbl" style="margin-top:0">Telegram ID или @username</div>
+      <div class="row"><input id="vid" type="text" placeholder="ID или @username" value="${id || ""}"><button class="f" id="vme" style="flex:none">Мой ID</button></div>
+      <button class="f" id="vchk" style="width:100%;margin-top:8px">Найти пользователя</button><div id="vst" style="margin-top:12px"></div>
     </div>
-    <div id="pane_usr" style="display:none">
-      <div class="card">
-        <div class="lbl" style="margin-top:0">Telegram ID</div>
-        <div class="row"><input id="vid" type="number" inputmode="numeric" placeholder="Введите ID" value="${id || ""}"><button class="f" id="vme" style="flex:none">Мой ID</button></div>
-        <button class="f" id="vchk" style="width:100%;margin-top:8px">Найти пользователя</button>
-        <div id="vst" style="margin-top:12px"></div>
-      </div>
-      <div class="sec">Активный безлимит${lst.ok ? " · " + lst.users.length : ""}</div>
-      ${lst.ok && lst.users.length ? lst.users.map(u => `<div class="card" data-vu="${u.id}" style="cursor:pointer"><div class="t" style="font-size:14px">${esc(u.name || "Без имени")}</div><div class="mu">ID ${u.id} · Безлимит</div></div>`).join("") : '<div class="empty">Список пуст</div>'}
-    </div>`);
+    <div class="sec">Активный безлимит${lst.ok ? " · " + lst.users.length : ""}</div>
+    ${lst.ok && lst.users.length ? lst.users.map(u => `<div class="card" data-vu="${u.id}" style="cursor:pointer"><div class="t" style="font-size:14px">${esc(u.name || "Без имени")}</div><div class="mu">ID ${u.id} · Безлимит</div></div>`).join("") : '<div class="empty">Список пуст</div>'}</div>`);
   const show = (r) => {
     const b = $("#vst"); if (!b) return;
     if (!r.ok) { b.innerHTML = `<div class="empty">${esc(r.msg || "Ошибка")}</div>`; return; }
@@ -440,27 +434,19 @@ async function vpnSheet(id) {
     $("#vrev").onclick = () => { if (confirm("Забрать VPN-доступ у " + id2 + "?")) act("revoke"); };
   };
   const check = async () => { const v = $("#vid").value.trim(); if (!v) return toast("Введи ID"); show(await api("vpn_user", { id: v })); };
-  $("#tab_gen").onclick = () => { $("#pane_gen").style.display = ""; $("#pane_usr").style.display = "none"; $("#tab_gen").className = "f ok"; $("#tab_usr").className = "f"; };
-  $("#tab_usr").onclick = () => { $("#pane_gen").style.display = "none"; $("#pane_usr").style.display = ""; $("#tab_usr").className = "f ok"; $("#tab_gen").className = "f"; };
+  const ts = "width:100%;height:40px;white-space:nowrap;padding:0 6px;font-size:13px";
+  $("#tab_gen").onclick = () => { $("#pane_gen").style.display=""; $("#pane_usr").style.display="none"; $("#tab_gen").className="f ok"; $("#tab_usr").className="f"; $("#tab_gen").style.cssText=ts; $("#tab_usr").style.cssText=ts; };
+  $("#tab_usr").onclick = () => { $("#pane_gen").style.display="none"; $("#pane_usr").style.display=""; $("#tab_usr").className="f ok"; $("#tab_gen").className="f"; $("#tab_gen").style.cssText=ts; $("#tab_usr").style.cssText=ts; };
   if (id) $("#tab_usr").click();
   $("#vg_btn").onclick = async () => {
-    const cnt = +$("#vg_cnt").value || 1;
-    const days = $("#vg_days").value === "" ? 30 : +$("#vg_days").value;
-    const prefix = $("#vg_pref").value.trim() || "admin";
-    const box = $("#vg_res");
-    box.innerHTML = '<div class="mu">Создание подписок Azika VPN...</div>';
+    const cnt = +$("#vg_cnt").value || 1, days = $("#vg_days").value === "" ? 30 : +$("#vg_days").value, prefix = $("#vg_pref").value.trim() || "admin";
+    $("#vg_res").innerHTML = '<div class="mu">Создание подписок...</div>';
     const r = await api("vpn_gen", { count: cnt, days, prefix });
-    toast(r.msg || (r.ok ? "Выполнено" : "Ошибка"));
-    if (!r.ok) { box.innerHTML = `<div class="empty">${esc(r.msg || "Ошибка")}</div>`; return; }
-    haptic("medium");
+    toast(r.msg || (r.ok ? "Готово" : "Ошибка"));
+    if (!r.ok) { $("#vg_res").innerHTML = `<div class="empty">${esc(r.msg || "Ошибка")}</div>`; return; }
     const txt = (r.links || []).join("\n");
-    box.innerHTML = `<div class="lbl" style="margin-top:4px">Подписки Azika VPN (${r.links.length} шт.):</div>
-      <textarea id="vg_out" readonly rows="${Math.min(8, Math.max(3, r.links.length + 1))}" style="width:100%;font-size:11px;font-family:monospace;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:10px;padding:8px;box-sizing:border-box">${esc(txt)}</textarea>
-      <button class="f" id="vg_copy" style="width:100%;margin-top:6px">Скопировать подписки</button>`;
-    $("#vg_copy").onclick = async () => {
-      try { await navigator.clipboard.writeText(txt); toast("Скопировано в буфер обмена"); haptic("light"); }
-      catch { const el = $("#vg_out"); el.select(); document.execCommand("copy"); toast("Скопировано"); }
-    };
+    $("#vg_res").innerHTML = `<div class="lbl">Подписки Azika VPN (${r.links.length}):</div><textarea id="vg_out" readonly rows="4" style="width:100%;font-size:11px;font-family:monospace;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:10px;padding:8px;box-sizing:border-box">${esc(txt)}</textarea><button class="f" id="vg_copy" style="width:100%;margin-top:6px">Скопировать подписки</button>`;
+    $("#vg_copy").onclick = () => { navigator.clipboard.writeText(txt); toast("Скопировано!"); };
   };
   $("#vchk").onclick = check;
   $("#vme").onclick = () => { $("#vid").value = me; check(); };
