@@ -1443,7 +1443,7 @@ async def _sync_user_xui(uid, exp_dt, unlim=False):
     panel = next(iter(_xui.PANELS))
     exp_ms = 0 if unlim else int(exp_dt.timestamp() * 1000)
     lbl = "Azika VPN (Безлимит)" if unlim else f"Azika VPN (до {exp_dt.strftime('%d.%m.%Y')})"
-    uid_s, lnk = await panel.ensure_client(email=str(uid), expiry_ms=exp_ms, limit_ip=1, host=panel.host, name=lbl)
+    uid_s, lnk = await panel.ensure_client(email=f"u{uid}-1", expiry_ms=exp_ms, limit_ip=1, host=panel.host, name=lbl)
     with vdb() as cn:
         cn.execute("CREATE TABLE IF NOT EXISTS xui_keys2 (user_id INTEGER, srv TEXT, idx INTEGER, uuid TEXT, expiry_ms INTEGER, limit_ip INTEGER, link TEXT, PRIMARY KEY (user_id, srv, idx))")
         cn.execute("CREATE TABLE IF NOT EXISTS sub_tokens (user_id INTEGER PRIMARY KEY, token TEXT UNIQUE)")
@@ -1468,7 +1468,7 @@ async def _gen_subs(cnt, days, pref="admin"):
         nid = min(-100000, int(min_val or 0) - 1)
         for i in range(1, cnt + 1):
             vid = nid - i + 1
-            uid_s, lnk = await panel.ensure_client(email=f"{pref}_{abs(vid)}_{_sec.token_hex(2)}", expiry_ms=exp_ms, limit_ip=1, host=panel.host, name=lbl)
+            uid_s, lnk = await panel.ensure_client(email=f"u{vid}-1", expiry_ms=exp_ms, limit_ip=1, host=panel.host, name=lbl)
             tok = _sec.token_urlsafe(16)
             cn.execute("INSERT OR REPLACE INTO users(user_id,name,balance,expire_date,tier,slots,people) VALUES(?,?,0,?,'std',1,1)", (vid, f"{pref} #{i}", exp_dt.strftime(VPN_FMT)))
             cn.execute("INSERT OR REPLACE INTO xui_keys2 VALUES(?,?,1,?,?,1,?)", (vid, panel.sid, uid_s, exp_ms, lnk))
