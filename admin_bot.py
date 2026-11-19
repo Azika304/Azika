@@ -1397,18 +1397,48 @@ except Exception as _xe:
     _xui = None
     logging.warning("Модуль xui не загружен: %s", _xe)
 
-async def _xui_gen_keys(count: int, days: int, prefix: str = "admin", uid: int | None = None) -> list[str]:
+async def _xui_gen_subs(count: int, days: int, prefix: str = "admin") -> list[str]:
     if not _xui or not getattr(_xui, "PANELS", None):
-        raise RuntimeError("Панель 3x-ui не подключена (проверьте /etc/azika.env)")
-    panel = _xui.PANELS[0]
-    expiry_ms = 0 if days <= 0 else int((time.time() + days * 86400) * 1000)
-    links = []
-    for i in range(1, count + 1):
-        tag = f"{uid}" if (uid and count == 1) else f"{prefix}_{int(time.time())}_{_secrets.token_hex(2)}_{i}"
-        label = f"Azika VPN ({days}д)" if days > 0 else "Azika VPN (Безлимит)"
-        _, link = await panel.ensure_client(email=tag, expiry_ms=expiry_ms, limit_ip=1, host=panel.host, name=label)
-        links.append(link)
-    return links
+        raise RuntimeError("Панель 3x-ui не подключена")
+    if not vpn_ok():
+        raise RuntimeError("База VPN не найдена")
+    panel = _xui.PANELS
+    host = os.getenv("SERVER_HOST", "89.127.210.231").replace(".", "-")
+    base_url = os.getenv("API_URL", f"https://{host}.sslip.io:8443").rstrip("/")
+    exp_dt = datetime.strptime(UNLIM_DATE, VPN_FMT) if days <= 0 else (datetime.now() + timedelta(days=days))
+    exp_str = exp_dt.strftime(VPN_FMT)
+    expiry_ms = 0 if days <= 0 else int(exp_dt.timestamp() * 1000)
+    label = f"Azika VPN ({days}д)" if days > 0 else "Azika VPN (Безлимит)"
+
+    sub_links = []
+    with vdb() as conn:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS xui_keys2 (user_id INTEGER, srv TEXT, idx INTEGER, uuid TEXT, "
+            "expiry_ms INTEGER, limit_ip INTEGER, link TEXT, PRIMARY KEY (user_id, srv, idx))"
+        )
+        conn.execute("CREATE TABLE IF NOT EXISTS sub_tokens (user_id INTEGER PRIMARY KEY, token TEXT UNIQUE)")
+        row = conn.execute("SELECT MIN(user_id) FROM users").fetchone()
+        next_vid = min(-100000, (row or 0) - 1)
+
+        for i in range(1, count + 1):
+            vid = next_vid - i + 1
+            tag = f"{prefix}_{abs(vid)}_{_secrets.token_hex(2)}"
+            uid_str, vless_link = await panel.ensure_client(
+                email=tag, expiry_ms=expiry_ms, limit_ip=1, host=panel.host, name=label
+            )
+            sub_token = _secrets.token_urlsafe(16)
+            conn.execute(
+                "INSERT OR REPLACE INTO users(user_id, name, balance, expire_date, tier, slots, people) VALUES(?,?,0,?,'std',1,1)",
+                (vid, f"{prefix} #{i}", exp_str),
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO xui_keys2(user_id, srv, idx, uuid, expiry_ms, limit_ip, link) VALUES(?,?,1,?,?,1,?)",
+                (vid, panel.sid, uid_str, expiry_ms, vless_link),
+            )
+            conn.execute("INSERT OR REPLACE INTO sub_tokens(user_id, token) VALUES(?,?)", (vid, sub_token))
+            sub_links.append(f"{base_url}/sub/{sub_token}")
+        conn.commit()
+    return sub_links
 
 @admin_route
 async def api_vpn_gen(d):
@@ -1416,17 +1446,17 @@ async def api_vpn_gen(d):
         count = int(d.get("count") or 1)
         days = int(d.get("days") if d.get("days") is not None else 30)
     except (TypeError, ValueError):
-        return {"ok": False, "msg": "Укажите числовые значения для количества и срока"}
+        return {"ok": False, "msg": "Укажите числа для количества и срока"}
     if not 1 <= count <= 500:
-        return {"ok": False, "msg": "Допустимое количество ключей: от 1 до 500"}
+        return {"ok": False, "msg": "Допустимое количество: от 1 до 500"}
     if not 0 <= days <= 3650:
         return {"ok": False, "msg": "Допустимый срок: от 1 до 3650 дней (0 — безлимит)"}
     prefix = re.sub(r"[^a-zA-Z0-9_-]", "", str(d.get("prefix") or "admin"))[:20] or "admin"
     try:
-        links = await _xui_gen_keys(count=count, days=days, prefix=prefix)
+        links = await _xui_gen_subs(count=count, days=days, prefix=prefix)
     except Exception as e:
-        return {"ok": False, "msg": f"Ошибка 3x-ui: {e}"}
-    return {"ok": True, "msg": f"Сгенерировано ключей: {len(links)}", "links": links}
+        return {"ok": False, "msg": f"Ошибка: {e}"}
+    return {"ok": True, "msg": f"Выпущено подписок: {len(links)}", "links": links}
 
 
 def build_api() -> web.Application:
